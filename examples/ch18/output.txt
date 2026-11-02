@@ -1,0 +1,47 @@
+$ python3 /home/tbangma/learn-git/examples/ch18/minigit.py init; ls .git; cat .git/HEAD
+HEAD
+objects
+refs
+ref: refs/heads/main
+$ python3 /home/tbangma/learn-git/examples/ch18/minigit.py add hello.txt src/main.c
+$ git ls-files -s
+100644 ce013625030ba8dba906f756967f9e9ca394464a 0	hello.txt
+100644 f7e582f82533be28c5813e8ea91918eb7fa61cdc 0	src/main.c
+$ git status -s; echo rc=$?
+A  hello.txt
+A  src/main.c
+rc=0
+$ python3 /home/tbangma/learn-git/examples/ch18/minigit.py commit 'first commit'
+ff16743be7175299bdc9d39552c5a12f86923322
+$ git fsck --strict; echo rc=$?
+rc=0
+$ git log --format='%H %an %s'
+ff16743be7175299bdc9d39552c5a12f86923322 Ada Lovelace first commit
+$ python3 /home/tbangma/learn-git/examples/ch18/minigit.py add hello.txt
+$ python3 /home/tbangma/learn-git/examples/ch18/minigit.py commit 'second commit'
+b803952ccd5501a88057b0dd5542674827c43f37
+$ python3 /home/tbangma/learn-git/examples/ch18/minigit.py log
+commit b803952ccd5501a88057b0dd5542674827c43f37
+
+    second commit
+
+commit ff16743be7175299bdc9d39552c5a12f86923322
+
+    first commit
+
+$ python3 /home/tbangma/learn-git/examples/ch18/minigit.py cat-file $(git rev-parse HEAD^{tree})
+100644 13ab7f7412573d479aa8b41ce1e29a9f9f2a62d5 hello.txt
+040000 b1a8becadd478624373132f066d206859ade455f src
+$ git ls-tree -r HEAD
+100644 blob 13ab7f7412573d479aa8b41ce1e29a9f9f2a62d5	hello.txt
+100644 blob f7e582f82533be28c5813e8ea91918eb7fa61cdc	src/main.c
+$ git show -s --format=%B HEAD~1
+first commit
+
+
+# same bytes: ask real git to build the same commit
+$ git commit-tree -p HEAD~1 -m 'second commit' $(git rev-parse HEAD^{tree}) | cut -c1-12; git rev-parse --short=12 HEAD
+b803952ccd55
+b803952ccd55
+$ git fsck --strict; echo rc=$?
+rc=0

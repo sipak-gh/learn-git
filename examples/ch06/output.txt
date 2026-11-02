@@ -1,0 +1,164 @@
+$ cat .git/HEAD
+ref: refs/heads/feature
+$ cat .git/refs/heads/main
+5d077e43fac11abb40dece318520511f16739eeb
+$ find .git/refs -type f
+.git/refs/heads/feature
+.git/refs/heads/main
+$ git rev-parse main
+5d077e43fac11abb40dece318520511f16739eeb
+$ git symbolic-ref HEAD
+refs/heads/feature
+$ git symbolic-ref --short HEAD
+feature
+$ git rev-parse --abbrev-ref HEAD
+feature
+$ git branch --show-current
+feature
+
+# tags
+$ git tag light
+$ git tag -a -m "Version 1.0" v1.0 HEAD~1
+$ find .git/refs/tags -type f
+.git/refs/tags/v1.0
+.git/refs/tags/light
+$ cat .git/refs/tags/light; cat .git/refs/tags/v1.0
+5d077e43fac11abb40dece318520511f16739eeb
+242b50ef9ddbe332c623bb649867d40d8c912377
+$ git rev-parse v1.0 v1.0^{} light
+242b50ef9ddbe332c623bb649867d40d8c912377
+a234550745ed7a418114eea0d8a62f4671a5cb0b
+5d077e43fac11abb40dece318520511f16739eeb
+$ git cat-file -t light; git cat-file -t v1.0
+commit
+tag
+$ git tag -n; git tag -l "v*"
+light           three
+v1.0            Version 1.0
+v1.0
+$ git show v1.0 --stat | head -8
+tag v1.0
+Tagger: Ada Lovelace <ada@example.com>
+Date:   Mon Jan 1 04:00:00 2024 +0000
+
+Version 1.0
+
+commit a234550745ed7a418114eea0d8a62f4671a5cb0b
+Author: Ada Lovelace <ada@example.com>
+$ git describe
+v1.0-1-g5d077e4
+$ git describe --always --abbrev=4 HEAD~1
+v1.0
+$ git tag -d light
+Deleted tag 'light' (was 5d077e4)
+
+# listing and plumbing
+$ git for-each-ref
+5d077e43fac11abb40dece318520511f16739eeb commit	refs/heads/feature
+5d077e43fac11abb40dece318520511f16739eeb commit	refs/heads/main
+242b50ef9ddbe332c623bb649867d40d8c912377 tag	refs/tags/v1.0
+$ git for-each-ref --format="%(refname:short) %(objecttype) %(subject)" refs/tags
+v1.0 tag Version 1.0
+$ git show-ref
+5d077e43fac11abb40dece318520511f16739eeb refs/heads/feature
+5d077e43fac11abb40dece318520511f16739eeb refs/heads/main
+242b50ef9ddbe332c623bb649867d40d8c912377 refs/tags/v1.0
+$ git update-ref refs/heads/scratch HEAD~2 && git branch -v
+* feature 5d077e4 three
+  main    5d077e4 three
+  scratch 4d14821 one
+$ git update-ref -d refs/heads/scratch && git branch
+* feature
+  main
+$ git update-ref refs/heads/x HEAD HEAD~1 2>&1
+fatal: update_ref failed for ref 'refs/heads/x': cannot lock ref 'refs/heads/x': unable to resolve reference 'refs/heads/x'
+$ git check-ref-format --branch "bad..name"; echo rc=$?
+fatal: 'bad..name' is not a valid branch name
+rc=128
+$ git check-ref-format refs/heads/ok/name; echo rc=$?
+rc=0
+
+# packed-refs
+$ git pack-refs --all && find .git/refs -type f; cat .git/packed-refs
+# pack-refs with: peeled fully-peeled sorted 
+5d077e43fac11abb40dece318520511f16739eeb refs/heads/feature
+5d077e43fac11abb40dece318520511f16739eeb refs/heads/main
+242b50ef9ddbe332c623bb649867d40d8c912377 refs/tags/v1.0
+^a234550745ed7a418114eea0d8a62f4671a5cb0b
+$ git branch newbranch && find .git/refs -type f
+.git/refs/heads/newbranch
+$ git branch -d newbranch && cat .git/packed-refs | wc -l
+Deleted branch newbranch (was 5d077e4).
+5
+
+# detached HEAD
+$ git switch --detach HEAD~1
+HEAD is now at a234550 two
+$ cat .git/HEAD
+a234550745ed7a418114eea0d8a62f4671a5cb0b
+$ git status | head -2
+HEAD detached at a234550
+nothing to commit, working tree clean
+$ git switch feature
+Warning: you are leaving 1 commit behind, not connected to
+any of your branches:
+
+  e4812ba detached commit
+
+Switched to branch 'feature'
+$ git branch rescued HEAD@{1} && git log --oneline --graph --all
+* e4812ba detached commit
+| * 5d077e4 three
+|/  
+* a234550 two
+* 4d14821 one
+
+# reflog
+$ git reflog
+5d077e4 HEAD@{0}: checkout: moving from e4812baa75a1c02be88c3c289ee3f2af33d1b714 to feature
+e4812ba HEAD@{1}: commit: detached commit
+a234550 HEAD@{2}: checkout: moving from feature to HEAD~1
+5d077e4 HEAD@{3}: checkout: moving from main to feature
+5d077e4 HEAD@{4}: commit: three
+a234550 HEAD@{5}: commit: two
+4d14821 HEAD@{6}: commit (initial): one
+$ cat .git/logs/HEAD | head -2
+0000000000000000000000000000000000000000 4d1482137da681b026efb59f0571111b4a9e9877 Ada Lovelace <ada@example.com> 1704074400 +0000	commit (initial): one
+4d1482137da681b026efb59f0571111b4a9e9877 a234550745ed7a418114eea0d8a62f4671a5cb0b Ada Lovelace <ada@example.com> 1704074400 +0000	commit: two
+$ git reflog show feature
+5d077e4 feature@{0}: branch: Created from HEAD
+$ git rev-parse HEAD@{2} main@{1}
+a234550745ed7a418114eea0d8a62f4671a5cb0b
+a234550745ed7a418114eea0d8a62f4671a5cb0b
+$ git log -g --format="%gd %gs" -n 3
+HEAD@{0} checkout: moving from e4812baa75a1c02be88c3c289ee3f2af33d1b714 to feature
+HEAD@{1} commit: detached commit
+HEAD@{2} checkout: moving from feature to HEAD~1
+$ git reflog expire --expire=now --all --dry-run | head -3
+would prune commit (initial): one
+would prune commit: two
+would prune commit: three
+
+# special refs
+$ git reset -q --hard HEAD~1
+$ cat .git/ORIG_HEAD; git rev-parse ORIG_HEAD
+5d077e43fac11abb40dece318520511f16739eeb
+5d077e43fac11abb40dece318520511f16739eeb
+$ git reset -q --hard ORIG_HEAD && git log --oneline -1
+5d077e4 three
+Automatic merge went well; stopped before committing as requested
+$ cat .git/MERGE_HEAD; git rev-parse m1; ls .git | grep MERGE
+6d1124f0bd0c9d9a8518f5505bed8cb57f5b37e5
+6d1124f0bd0c9d9a8518f5505bed8cb57f5b37e5
+AUTO_MERGE
+MERGE_HEAD
+MERGE_MODE
+MERGE_MSG
+$ git fetch -q origin; cat .git/FETCH_HEAD
+3c5a035e2873a54a0b184dd95b64849d6b8eb620		branch 'main' of /home/tbangma/learn-git/.scratch/ch06/work/lab
+5d077e43fac11abb40dece318520511f16739eeb	not-for-merge	branch 'feature' of /home/tbangma/learn-git/.scratch/ch06/work/lab
+6d1124f0bd0c9d9a8518f5505bed8cb57f5b37e5	not-for-merge	branch 'm1' of /home/tbangma/learn-git/.scratch/ch06/work/lab
+e4812baa75a1c02be88c3c289ee3f2af33d1b714	not-for-merge	branch 'rescued' of /home/tbangma/learn-git/.scratch/ch06/work/lab
+$ ls .git/refs/remotes/origin; cat .git/refs/remotes/origin/HEAD
+HEAD
+ref: refs/remotes/origin/main

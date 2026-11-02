@@ -1,0 +1,141 @@
+$ git init -q notes && cd notes
+$ git status
+On branch main
+
+No commits yet
+
+nothing to commit (create/copy files and use "git add" to track)
+$ git status -s
+?? .gitignore
+?? todo.txt
+$ git status --ignored -s
+?? .gitignore
+?? todo.txt
+!! build/
+!! run.log
+$ git check-ignore -v run.log
+.gitignore:2:*.log	run.log
+$ git add todo.txt .gitignore && git commit -m "Add todo list"
+[main (root-commit) 2916930] Add todo list
+ 2 files changed, 14 insertions(+)
+ create mode 100644 .gitignore
+ create mode 100644 todo.txt
+$ git log --oneline
+2916930 Add todo list
+# partial staging: two hunks, stage one
+$ git diff
+diff --git a/todo.txt b/todo.txt
+index 3545a88..40fa3ef 100644
+--- a/todo.txt
++++ b/todo.txt
+@@ -1,4 +1,4 @@
+-buy milk
++buy oat milk
+ task 2
+ task 3
+ task 4
+@@ -9,4 +9,4 @@ task 8
+ task 9
+ task 10
+ task 11
+-sleep
++sleep early
+$ printf "y\nn\n" | git add -p
+diff --git a/todo.txt b/todo.txt
+index 3545a88..40fa3ef 100644
+--- a/todo.txt
++++ b/todo.txt
+@@ -1,4 +1,4 @@
+-buy milk
++buy oat milk
+ task 2
+ task 3
+ task 4
+(1/2) Stage this hunk [y,n,q,a,d,j,J,g,/,e,?]? @@ -9,4 +9,4 @@ task 8
+ task 9
+ task 10
+ task 11
+-sleep
++sleep early
+(2/2) Stage this hunk [y,n,q,a,d,K,g,/,e,?]? 
+$ git status -s
+MM todo.txt
+$ git diff --staged
+diff --git a/todo.txt b/todo.txt
+index 3545a88..b740218 100644
+--- a/todo.txt
++++ b/todo.txt
+@@ -1,4 +1,4 @@
+-buy milk
++buy oat milk
+ task 2
+ task 3
+ task 4
+$ git diff
+diff --git a/todo.txt b/todo.txt
+index b740218..40fa3ef 100644
+--- a/todo.txt
++++ b/todo.txt
+@@ -9,4 +9,4 @@ task 8
+ task 9
+ task 10
+ task 11
+-sleep
++sleep early
+$ git diff HEAD --stat
+ todo.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+$ git commit -q -m "Oat milk" && git commit -qam "Sleep early" && git log --oneline --stat
+1ab2fd7 Sleep early
+ todo.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+7f7e135 Oat milk
+ todo.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+2916930 Add todo list
+ .gitignore |  2 ++
+ todo.txt   | 12 ++++++++++++
+ 2 files changed, 14 insertions(+)
+
+# rm, mv
+$ git mv todo.txt tasks.txt && git status -s
+R  todo.txt -> tasks.txt
+$ git rm --cached tasks.txt && git status -s
+rm 'tasks.txt'
+D  todo.txt
+?? tasks.txt
+$ git add tasks.txt && git rm -f tasks.txt && git status -s
+rm 'tasks.txt'
+D  todo.txt
+$ git restore --source=HEAD --staged --worktree todo.txt; git status -s; ls
+build
+run.log
+todo.txt
+
+# undo variants
+$ git add todo.txt && git restore --staged todo.txt && git status -s
+ M todo.txt
+$ git restore todo.txt && git status -s
+$ git switch -c feature && git branch --show-current
+Switched to a new branch 'feature'
+feature
+$ git log --oneline -n 2 --format="%h %an %ad %s" --date=short
+1ab2fd7 Ada Lovelace 2024-01-01 Sleep early
+7f7e135 Ada Lovelace 2024-01-01 Oat milk
+$ git show --stat HEAD
+commit 1ab2fd792cb42635a4634ca2a507ee40f7613063
+Author: Ada Lovelace <ada@example.com>
+Date:   Mon Jan 1 01:00:00 2024 +0000
+
+    Sleep early
+
+ todo.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+# clone
+$ git clone -q notes notes-copy && git -C notes-copy log --oneline | head -3
+1ab2fd7 Sleep early
+7f7e135 Oat milk
+2916930 Add todo list
+$ git -C notes-copy remote -v
+origin	/home/tbangma/learn-git/.scratch/ch02/work/notes (fetch)
+origin	/home/tbangma/learn-git/.scratch/ch02/work/notes (push)

@@ -1,0 +1,88 @@
+# deleting a branch and getting it back
+$ git branch -D feature
+Deleted branch feature (was 467e7a7).
+$ git reflog --format="%h %gd %gs" | head -5
+4e9827c HEAD@{0} checkout: moving from feature to main
+467e7a7 HEAD@{1} commit: feature work
+4e9827c HEAD@{2} checkout: moving from main to feature
+4e9827c HEAD@{3} commit: commit 6
+395f741 HEAD@{4} commit: commit 5
+
+# dangling objects
+$ git fsck --lost-found 2>&1 | head -3
+dangling commit 467e7a74bef8db13d23912c3919f11f498b66aa4
+$ git log --oneline -1 467e7a74bef8db13d23912c3919f11f498b66aa4
+467e7a7 feature work
+$ git branch feature 467e7a74bef8db13d23912c3919f11f498b66aa4; git log --oneline -2 feature
+467e7a7 feature work
+4e9827c commit 6
+
+# reset --hard and reflog
+$ git reset -q --hard HEAD~2; git log --oneline -1
+99b52de commit 4
+$ git reflog -3 --format="%h %gd %gs"
+99b52de HEAD@{0} reset: moving to HEAD~2
+4e9827c HEAD@{1} checkout: moving from feature to main
+467e7a7 HEAD@{2} commit: feature work
+$ git reset -q --hard HEAD@{1}; git log --oneline -1
+4e9827c commit 6
+
+# dangling blob (added but never committed)
+$ git fsck --lost-found 2>&1 | head -2
+dangling blob fbbdf22a3483e250b1a1ffe75e0dab4e58d7af3c
+$ git cat-file -p fbbdf22a3483e250b1a1ffe75e0dab4e58d7af3c
+precious
+$ ls .git/lost-found/other | head -2
+fbbdf22a3483e250b1a1ffe75e0dab4e58d7af3c
+
+# reflog expiry and gc
+$ git reflog expire --expire=now --all; git reflog -2 --format="%h %gs"
+$ git gc --prune=now -q; git fsck --lost-found 2>&1 | head -2; echo rc=$?
+rc=0
+
+# corruption
+$ git fsck 2>&1; echo rc=$?
+rc=0
+$ git fsck 2>&1 | head -4
+error: inflate: data stream error (incorrect header check)
+error: unable to parse header of .git/objects/f0/f2a6f2c03ddafd9c6b00616c236c32e0805d22
+error: f0f2a6f2c03ddafd9c6b00616c236c32e0805d22: object corrupt or missing: .git/objects/f0/f2a6f2c03ddafd9c6b00616c236c32e0805d22
+error: inflate: data stream error (incorrect header check)
+$ git cat-file -p f0f2a6f2c03ddafd9c6b00616c236c32e0805d22 2>&1 | head -2
+error: inflate: data stream error (incorrect header check)
+error: unable to unpack f0f2a6f2c03ddafd9c6b00616c236c32e0805d22 header
+$ git fsck 2>&1 | head -3
+error: refs/heads/main: invalid sha1 pointer f0f2a6f2c03ddafd9c6b00616c236c32e0805d22
+error: HEAD: invalid sha1 pointer f0f2a6f2c03ddafd9c6b00616c236c32e0805d22
+error: HEAD: invalid reflog entry f0f2a6f2c03ddafd9c6b00616c236c32e0805d22
+$ git update-ref refs/heads/main origin/main; git reflog expire --expire=now --all; git reset -q --hard main; git fsck 2>&1; echo rc=$?
+dangling tree e70101f13ba47e96076cffb2c547fccc120da061
+rc=0
+$ git cat-file -t f0f2a6f2c03ddafd9c6b00616c236c32e0805d22 2>&1
+fatal: git cat-file: could not get object info
+
+# bisect run
+$ git bisect start HEAD good >/dev/null; git bisect run ../check.sh 2>&1 | grep -E "^(running|bisecting|[0-9a-f]{40}|bisect)" | cut -c1-70
+running  '../check.sh'
+running  '../check.sh'
+99b52de431ea3dfb2a35dfa05569fd9924e9dee6 is the first bad commit
+bisect found first bad commit
+$ git bisect log | tail -3; git bisect reset 2>&1 | tail -1
+# good: [3bb8548809edf5852b9bcb9ed703b6cea6374ddc] commit 3
+git bisect good 3bb8548809edf5852b9bcb9ed703b6cea6374ddc
+# first bad commit: [99b52de431ea3dfb2a35dfa05569fd9924e9dee6] commit 4
+Switched to branch 'main'
+
+# GIT_TRACE
+$ GIT_TRACE=1 git st 2>&1 | sed -E "s/^[0-9:.]+ +//; s/^([a-z_.-]+\.c:[0-9]+) +/\1 /" | head -4
+git.c:742 trace: exec: git-st
+run-command.c:668 trace: run_command: git-st
+git.c:396 trace: alias expansion: st => status -s
+git.c:803 trace: exec: git status -s
+$ GIT_TRACE_PERFORMANCE=1 git status -s 2>&1 | sed -E "s/^[0-9:.]+ +//; s/^([a-z_.-]+\.c:[0-9]+) +/\1 /" | sed -E 's/performance: [0-9.]+ s/performance: N s/' | head -2
+read-cache.c:2398 performance: N s:  read cache .git/index
+read-cache.c:1690 performance: N s:  refresh index
+$ GIT_TRACE_SETUP=1 git status -s 2>&1 | sed -E "s/^[0-9:.]+ +//; s/^([a-z_.-]+\.c:[0-9]+) +/\1 /" | sed 's#/home/tbangma/learn-git/.scratch/ch17/work/lab#.#' | head -3
+trace.c:387 setup: git_dir: .git
+trace.c:388 setup: git_common_dir: .git
+trace.c:389 setup: worktree: .

@@ -1,0 +1,193 @@
+# what clone configured
+$ git config --get-regexp "^(remote|branch)"
+remote.origin.url /home/tbangma/learn-git/.scratch/ch12/work/origin.git
+remote.origin.fetch +refs/heads/*:refs/remotes/origin/*
+branch.main.remote origin
+branch.main.merge refs/heads/main
+$ cat .git/config | sed -n "/remote/,\$p"
+[remote "origin"]
+	url = /home/tbangma/learn-git/.scratch/ch12/work/origin.git
+	fetch = +refs/heads/*:refs/remotes/origin/*
+[branch "main"]
+	remote = origin
+	merge = refs/heads/main
+$ git remote -v
+origin	/home/tbangma/learn-git/.scratch/ch12/work/origin.git (fetch)
+origin	/home/tbangma/learn-git/.scratch/ch12/work/origin.git (push)
+$ git remote show origin
+* remote origin
+  Fetch URL: /home/tbangma/learn-git/.scratch/ch12/work/origin.git
+  Push  URL: /home/tbangma/learn-git/.scratch/ch12/work/origin.git
+  HEAD branch: main
+  Remote branch:
+    main tracked
+  Local branch configured for 'git pull':
+    main merges with remote main
+  Local ref configured for 'git push':
+    main pushes to main (up to date)
+
+# remote-tracking branches live under refs/remotes
+$ git branch -a -vv
+* main                0562fb0 [origin/main] initial
+  remotes/origin/HEAD -> origin/main
+  remotes/origin/main 0562fb0 initial
+$ git for-each-ref refs/remotes
+0562fb0b149b46dca0dfcaf26ff15ab0c80b1507 commit	refs/remotes/origin/HEAD
+0562fb0b149b46dca0dfcaf26ff15ab0c80b1507 commit	refs/remotes/origin/main
+$ cat .git/refs/remotes/origin/HEAD
+ref: refs/remotes/origin/main
+$ git rev-parse origin/main main
+0562fb0b149b46dca0dfcaf26ff15ab0c80b1507
+0562fb0b149b46dca0dfcaf26ff15ab0c80b1507
+
+# refspecs
+$ git ls-remote origin
+0562fb0b149b46dca0dfcaf26ff15ab0c80b1507	HEAD
+0562fb0b149b46dca0dfcaf26ff15ab0c80b1507	refs/heads/main
+$ git fetch origin "refs/heads/main:refs/remotes/origin/copy" 2>&1; git branch -r
+From /home/tbangma/learn-git/.scratch/ch12/work/origin
+ * [new branch]      main       -> origin/copy
+  origin/HEAD -> origin/main
+  origin/copy
+  origin/main
+$ git fetch origin main 2>&1; cat .git/FETCH_HEAD
+From /home/tbangma/learn-git/.scratch/ch12/work/origin
+ * branch            main       -> FETCH_HEAD
+0562fb0b149b46dca0dfcaf26ff15ab0c80b1507		branch 'main' of /home/tbangma/learn-git/.scratch/ch12/work/origin
+$ git config --get-all remote.origin.fetch
++refs/heads/*:refs/remotes/origin/*
+
+# fetch vs pull; ahead/behind
+$ git fetch
+From /home/tbangma/learn-git/.scratch/ch12/work/origin
+   0562fb0..e812d16  main       -> origin/main
+$ git status -sb
+## main...origin/main [behind 1]
+$ git log --oneline main..origin/main
+e812d16 bob work
+$ git pull --ff-only
+Updating 0562fb0..e812d16
+Fast-forward
+ bob.txt | 1 +
+ 1 file changed, 1 insertion(+)
+ create mode 100644 bob.txt
+
+# rejected push, force-with-lease
+$ git push origin main
+To /home/tbangma/learn-git/.scratch/ch12/work/origin.git
+ ! [rejected]        main -> main (fetch first)
+error: failed to push some refs to '/home/tbangma/learn-git/.scratch/ch12/work/origin.git'
+hint: Updates were rejected because the remote contains work that you do
+hint: not have locally. This is usually caused by another repository pushing
+hint: to the same ref. You may want to first integrate the remote changes
+hint: (e.g., 'git pull ...') before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+$ git fetch -q; git status -sb | head -1
+## main...origin/main [ahead 1, behind 1]
+$ git pull --rebase 2>&1 | tail -1
+Rebasing (1/1)[KSuccessfully rebased and updated refs/heads/main.
+$ git push origin main 2>&1 | tail -2
+To /home/tbangma/learn-git/.scratch/ch12/work/origin.git
+   06cd7f9..86e4d74  main -> main
+
+# force-with-lease
+$ git push --force-with-lease origin main 2>&1 | tail -2
+To /home/tbangma/learn-git/.scratch/ch12/work/origin.git
+ + 86e4d74...ac03d70 main -> main (forced update)
+$ git push --force-with-lease origin main 2>&1 | tail -4
+To /home/tbangma/learn-git/.scratch/ch12/work/origin.git
+ ! [rejected]        main -> main (stale info)
+error: failed to push some refs to '/home/tbangma/learn-git/.scratch/ch12/work/origin.git'
+$ git fetch -q; git reset -q --hard origin/main; git log --oneline -3
+bb904f1 bob third
+ac03d70 alice local (amended)
+06cd7f9 bob second
+
+# upstream tracking
+$ git switch -c feature
+Switched to a new branch 'feature'
+$ git push 2>&1 | head -3
+fatal: The current branch feature has no upstream branch.
+To push the current branch and set the remote as upstream, use
+
+$ git push -u origin feature 2>&1 | tail -2
+ * [new branch]      feature -> feature
+Branch 'feature' set up to track remote branch 'feature' from 'origin'.
+$ git branch -vv
+* feature 257cfb3 [origin/feature] feature
+  main    bb904f1 [origin/main] bob third
+$ git config push.default
+$ git config push.autoSetupRemote true; git switch -q -c f2; w f2 f2; git add .; c f2; git push 2>&1 | head -2
+fatal: The current branch f2 has no upstream branch.
+To push the current branch and set the remote as upstream, use
+$ git config --unset push.autoSetupRemote
+$ git branch -u origin/main f2; git rev-parse --abbrev-ref f2@{upstream}
+Branch 'f2' set up to track remote branch 'main' from 'origin'.
+origin/main
+
+# delete, prune
+ - [deleted]         feature
+$ git branch -r
+  origin/HEAD -> origin/main
+  origin/copy
+  origin/feature
+  origin/main
+$ git fetch --prune 2>&1; git branch -r
+From /home/tbangma/learn-git/.scratch/ch12/work/origin
+ - [deleted]         (none)     -> origin/copy
+ - [deleted]         (none)     -> origin/feature
+  origin/HEAD -> origin/main
+  origin/main
+$ git remote prune origin; echo ok
+ok
+$ git config fetch.prune true; git config --get fetch.prune
+true
+
+# tags
+$ git push origin v1 2>&1 | tail -1
+ * [new tag]         v1 -> v1
+$ git ls-remote --tags origin
+95dd6d8842e5e948e5f2b3cc9d124b659e60bbb3	refs/tags/v1
+13806b8a086a54f782fafbf5fa951853082ab003	refs/tags/v1^{}
+$ git push origin --tags 2>&1 | tail -1
+Everything up-to-date
+
+# multiple remotes; triangular workflow
+$ git remote add upstream ../upstream.git; git remote -v
+origin	/home/tbangma/learn-git/.scratch/ch12/work/origin.git (fetch)
+origin	/home/tbangma/learn-git/.scratch/ch12/work/origin.git (push)
+upstream	../upstream.git (fetch)
+upstream	../upstream.git (push)
+$ git config remote.pushDefault origin; git config --get remote.pushDefault
+origin
+$ git fetch upstream 2>&1; git branch -r
+From ../upstream
+ * [new branch]      main       -> upstream/main
+  origin/HEAD -> origin/main
+  origin/main
+  upstream/main
+$ git remote rename upstream canon; git branch -r | tr "\n" " "
+  canon/main   origin/HEAD -> origin/main   origin/main $ git remote set-url origin ../origin.git; git remote get-url origin
+../origin.git
+$ git remote remove canon; git branch -r | tr "\n" " "
+  origin/HEAD -> origin/main   origin/main 
+# push refspec tricks
+$ git push origin HEAD:refs/heads/from-alice 2>&1 | tail -1
+ * [new branch]      HEAD -> from-alice
+$ git push origin :from-alice 2>&1 | tail -1
+ - [deleted]         from-alice
+$ git push --dry-run origin main 2>&1
+Everything up-to-date
+
+# url rewriting and credentials
+$ git config url."https://example.invalid/".insteadOf "ex:"; git remote add tmp ex:foo.git; git remote get-url tmp
+https://example.invalid/foo.git
+$ git config credential.helper; git credential-store 2>&1 | head -1
+usage: git credential-store [<options>] <action>
+$ wc -l < .git/cred
+1
+$ printf "protocol=https\nhost=example.com\n\n" | git -c credential.helper="store --file=$PWD/.git/cred" credential fill
+protocol=https
+host=example.com
+username=ada
+password=pw-example-123

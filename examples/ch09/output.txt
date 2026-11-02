@@ -1,0 +1,284 @@
+# diff algorithms: a file where Myers and patience disagree
+$ git diff --no-index --diff-algorithm=myers old.c new.c | tail -n +5
+@@ -1,8 +1,7 @@
+ 
+-u0
+ }
+-
+ }
++
+     return 0;
+ u3
+     return 0;
+$ git diff --no-index --diff-algorithm=patience old.c new.c | tail -n +5
+@@ -1,8 +1,7 @@
+ 
+-u0
++}
+ }
+ 
+-}
+     return 0;
+ u3
+     return 0;
+$ git diff --no-index --diff-algorithm=histogram old.c new.c | tail -n +5
+@@ -1,8 +1,7 @@
+ 
+-u0
+-}
+-
+ }
++}
++
+     return 0;
+ u3
+     return 0;
+$ git diff --no-index --diff-algorithm=minimal --stat old.c new.c
+ old.c => new.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+$ git config diff.algorithm histogram; git config --get diff.algorithm
+histogram
+
+# word diff
+$ git diff --no-index --word-diff s1 s2
+diff --git a/s1 b/s2
+index 2fe6575..fd5daf5 100644
+--- a/s1
++++ b/s2
+@@ -1 +1 @@
+The quick [-brown-]{+red+} fox [-jumps-]{+leaps+} over the lazy [-dog.-]{+cat.+}
+$ git diff --no-index --word-diff=porcelain s1 s2
+diff --git a/s1 b/s2
+index 2fe6575..fd5daf5 100644
+--- a/s1
++++ b/s2
+@@ -1 +1 @@
+ The quick 
+-brown
++red
+  fox 
+-jumps
++leaps
+  over the lazy 
+-dog.
++cat.
+~
+$ git diff --no-index --word-diff-regex=. --word-diff=plain s1 s2 | tail -1
+The quick [-b-]r[-own-]{+ed+} fox [-jum-]{+lea+}ps over the lazy [-dog-]{+cat+}.
+$ git diff --no-index --color-words --color=always s1 s2 | cat -v | tail -1
+The quick ^[[31mbrown^[[m^[[32mred^[[m fox ^[[31mjumps^[[m^[[32mleaps^[[m over the lazy ^[[31mdog.^[[m^[[32mcat.^[[m
+$ git diff --no-index -U0 --ignore-all-space s1 s1; echo rc=$?
+rc=0
+
+# rename detection
+$ git diff --cached --stat -M
+ data.txt => renamed.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+$ git diff --cached --name-status -M50%
+R095	data.txt	renamed.txt
+$ git diff --cached --name-status --no-renames
+D	data.txt
+A	renamed.txt
+$ git diff --cached --name-status -M
+D	data.txt
+A	renamed.txt
+$ git diff --cached --name-status -M30%
+D	data.txt
+A	renamed.txt
+$ git diff --cached --name-status -C
+A	copy.txt
+$ git diff --cached --name-status -C --find-copies-harder
+C098	renamed.txt	copy.txt
+
+# three-way merge by hand with merge-file
+$ git merge-file -p ours.txt base.txt theirs.txt
+a
+B-ours
+c
+d
+E-theirs
+$ git merge-file -p ours.txt base.txt theirs2.txt; echo rc=$?
+a
+<<<<<<< ours.txt
+B-ours
+=======
+b-theirs
+>>>>>>> theirs2.txt
+c
+d
+e
+rc=1
+$ git merge-file -p --diff3 ours.txt base.txt theirs2.txt
+a
+<<<<<<< ours.txt
+B-ours
+||||||| base.txt
+b
+=======
+b-theirs
+>>>>>>> theirs2.txt
+c
+d
+e
+$ git merge-file -p --zdiff3 ours.txt base.txt theirs2.txt 2>&1 | head -3
+error: unknown option `zdiff3'
+usage: git merge-file [<options>] [-L <name1> [-L <orig> [-L <name2>]]] <file1> <orig-file> <file2>
+
+
+# a real conflict
+$ git merge theirs
+Auto-merging greet.txt
+CONFLICT (content): Merge conflict in greet.txt
+Automatic merge failed; fix conflicts and then commit the result.
+$ cat greet.txt
+header
+<<<<<<< HEAD
+hello there
+=======
+hello, world
+>>>>>>> theirs
+middle
+filler1
+filler2
+filler3
+filler4
+filler5
+footer (theirs)
+$ git diff
+diff --cc greet.txt
+index 494a944,5b3d1ab..0000000
+--- a/greet.txt
++++ b/greet.txt
+@@@ -1,5 -1,5 +1,9 @@@
+  header
+++<<<<<<< HEAD
+ +hello there
+++=======
++ hello, world
+++>>>>>>> theirs
+  middle
+  filler1
+  filler2
+$ git diff --ours --stat | tail -1; git diff --theirs --stat | tail -1
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+ 1 file changed, 4 insertions(+)
+$ git checkout --conflict=diff3 greet.txt && sed -n 1,9p greet.txt
+Recreated 1 merge conflict
+header
+<<<<<<< ours
+hello there
+||||||| base
+hello
+=======
+hello, world
+>>>>>>> theirs
+middle
+$ git checkout --merge greet.txt && sed -n 1,5p greet.txt
+Recreated 1 merge conflict
+header
+<<<<<<< ours
+hello there
+=======
+hello, world
+$ git log --merge --oneline
+149c187 ours edit
+9b6d8a9 theirs edits
+$ git merge --abort && git status -sb
+## main
+$ git -c merge.conflictStyle=diff3 merge theirs | head -2
+Auto-merging greet.txt
+CONFLICT (content): Merge conflict in greet.txt
+$ git merge --abort
+$ git -c merge.conflictStyle=zdiff3 merge theirs 2>&1 | head -2
+fatal: unknown style 'zdiff3' given for 'merge.conflictstyle'
+$ git merge -X ours theirs && cat greet.txt && git reset -q --hard HEAD~1
+Auto-merging greet.txt
+Merge made by the 'ort' strategy.
+ greet.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+header
+hello there
+middle
+filler1
+filler2
+filler3
+filler4
+filler5
+footer (theirs)
+$ git merge -X theirs theirs && sed -n 1,2p greet.txt && git reset -q --hard HEAD~1
+Auto-merging greet.txt
+Merge made by the 'ort' strategy.
+ greet.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+header
+hello, world
+$ git merge -s ours theirs -m "Merge theirs (ours)" && sed -n 1,2p greet.txt && git reset -q --hard HEAD~1
+Merge made by the 'ours' strategy.
+header
+hello there
+
+# resolve, commit
+$ git add greet.txt && git commit -m "Merge theirs" && git log --oneline --graph
+[main 2d7b6d9] Merge theirs
+*   2d7b6d9 Merge theirs
+|\  
+| * 9b6d8a9 theirs edits
+* | 149c187 ours edit
+|/  
+* ef80bfc greet
+* c825fe3 rename
+* 56f6028 data
+
+# rerere
+$ ls .git/rr-cache | wc -l
+1
+$ git add greet.txt && git commit -qm "Merge theirs (resolved)"
+Recorded resolution for 'greet.txt'.
+$ git rerere status; ls .git/rr-cache/*
+postimage
+preimage
+$ git merge theirs
+Auto-merging greet.txt
+CONFLICT (content): Merge conflict in greet.txt
+Resolved 'greet.txt' using previous resolution.
+Automatic merge failed; fix conflicts and then commit the result.
+$ git diff --stat; git status -sb | head -3
+ greet.txt | Unmerged
+ greet.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+## main
+UU greet.txt
+$ cat greet.txt | sed -n 2p
+hello there, world
+$ git rerere diff | head -3
+
+# octopus
+$ git merge o1 o2 o3 -m "Octopus"
+Fast-forwarding to: o1
+Trying simple merge with o2
+Trying simple merge with o3
+Merge made by the 'octopus' strategy.
+ o1.txt | 1 +
+ o2.txt | 1 +
+ o3.txt | 1 +
+ 3 files changed, 3 insertions(+)
+ create mode 100644 o1.txt
+ create mode 100644 o2.txt
+ create mode 100644 o3.txt
+$ git log --oneline --graph -5 | head -8
+*-.   84b66ee Octopus
+|\ \  
+| | * 4854e85 o3
+| * | 1ce2ac9 o2
+| |/  
+* / eca68d5 o1
+|/  
+* 149c187 ours edit
+$ git cat-file -p HEAD | grep -c ^parent
+3
+
+# subtree merge strategy option
+$ git merge -s ours --no-commit --allow-unrelated-histories lib/main 2>&1 | head -2
+Automatic merge went well; stopped before committing as requested
+$ git read-tree --prefix=vendor/lib/ -u lib/main && git commit -qm "Vendor lib" && ls vendor/lib
+lib.c

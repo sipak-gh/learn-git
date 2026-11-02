@@ -1,0 +1,252 @@
+$ git log --oneline
+cced086 Rename calc to mathlib
+586e8bb Move mul to the end
+02041a6 Use ValueError
+4e64243 Add div with zero check
+7f3be6a Tighten sub
+d19fa8c Add mul
+74aa84f Add add and sub
+$ git log --format="%h %an <%ae> %ad %s" --date=short -3
+cced086 Grace Hopper <grace@example.com> 2024-01-01 Rename calc to mathlib
+586e8bb Grace Hopper <grace@example.com> 2024-01-01 Move mul to the end
+02041a6 Grace Hopper <grace@example.com> 2024-01-01 Use ValueError
+$ git log --pretty=format:"%h|%an|%ar|%s" -n2 | cut -d"|" -f1,2,4; echo
+cced086|Grace Hopper|Rename calc to mathlib
+586e8bb|Grace Hopper|Move mul to the end
+
+$ git log --stat --format="--- %h %s" -2
+--- cced086 Rename calc to mathlib
+
+ calc.py => mathlib.py | 0
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+--- 586e8bb Move mul to the end
+
+ calc.py | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+$ git log --name-status --format=%s -3
+Rename calc to mathlib
+
+R100	calc.py	mathlib.py
+Move mul to the end
+
+M	calc.py
+Use ValueError
+
+M	calc.py
+$ git log --author=Grace --format=%s
+Rename calc to mathlib
+Move mul to the end
+Use ValueError
+Add mul
+$ git log --grep="^Add" --format=%s
+Add div with zero check
+Add mul
+Add add and sub
+$ git log --grep=valueerror -i --format=%s
+Use ValueError
+
+# pickaxe: -S counts occurrences, -G greps changed lines
+$ git log -S"ZeroDivisionError" --oneline
+02041a6 Use ValueError
+4e64243 Add div with zero check
+$ git log -S"b is zero" --oneline
+4e64243 Add div with zero check
+$ git log -G"b is zero" --oneline
+02041a6 Use ValueError
+4e64243 Add div with zero check
+$ git log -G"a ?- ?b" --oneline
+7f3be6a Tighten sub
+74aa84f Add add and sub
+$ git log -L:sub:mathlib.py --format="--- %h %s"
+--- 7f3be6a Tighten sub
+
+diff --git a/calc.py b/calc.py
+--- a/calc.py
++++ b/calc.py
+@@ -4,3 +4,3 @@
+ def sub(a, b):
+-    return a - b
++    return a-b
+ 
+--- d19fa8c Add mul
+
+diff --git a/calc.py b/calc.py
+--- a/calc.py
++++ b/calc.py
+@@ -4,2 +4,3 @@
+ def sub(a, b):
+     return a - b
++
+--- 74aa84f Add add and sub
+
+diff --git a/calc.py b/calc.py
+--- /dev/null
++++ b/calc.py
+@@ -0,0 +4,2 @@
++def sub(a, b):
++    return a - b
+$ git log -L 4,5:mathlib.py --format="--- %h %s" -s
+--- 7f3be6a Tighten sub
+--- 74aa84f Add add and sub
+
+# blame
+$ git blame mathlib.py
+^74aa84f calc.py (Ada Lovelace 2024-01-01 02:00:00 +0000  1) def add(a, b):
+^74aa84f calc.py (Ada Lovelace 2024-01-01 02:00:00 +0000  2)     return a + b
+^74aa84f calc.py (Ada Lovelace 2024-01-01 02:00:00 +0000  3) 
+^74aa84f calc.py (Ada Lovelace 2024-01-01 02:00:00 +0000  4) def sub(a, b):
+7f3be6a4 calc.py (Ada Lovelace 2024-01-01 04:00:00 +0000  5)     return a-b
+d19fa8c3 calc.py (Grace Hopper 2024-01-01 03:00:00 +0000  6) 
+4e64243c calc.py (Ada Lovelace 2024-01-01 05:00:00 +0000  7) def div(a, b):
+4e64243c calc.py (Ada Lovelace 2024-01-01 05:00:00 +0000  8)     if b == 0:
+02041a6e calc.py (Grace Hopper 2024-01-01 06:00:00 +0000  9)         raise ValueError("b is zero")
+4e64243c calc.py (Ada Lovelace 2024-01-01 05:00:00 +0000 10)     return a / b
+586e8bb8 calc.py (Grace Hopper 2024-01-01 07:00:00 +0000 11) 
+586e8bb8 calc.py (Grace Hopper 2024-01-01 07:00:00 +0000 12) def mul(a, b):
+586e8bb8 calc.py (Grace Hopper 2024-01-01 07:00:00 +0000 13)     """Multiply two numbers together and return the product."""
+586e8bb8 calc.py (Grace Hopper 2024-01-01 07:00:00 +0000 14)     return a * b
+$ git blame -L 4,5 --porcelain mathlib.py | head -12
+74aa84f1739f10f283adf929db3a0591067a5be2 4 4 1
+author Ada Lovelace
+author-mail <ada@example.com>
+author-time 1704074400
+author-tz +0000
+committer Ada Lovelace
+committer-mail <ada@example.com>
+committer-time 1704074400
+committer-tz +0000
+summary Add add and sub
+boundary
+filename calc.py
+$ git blame -e -L1,1 mathlib.py
+^74aa84f calc.py (<ada@example.com> 2024-01-01 02:00:00 +0000 1) def add(a, b):
+
+# blame -w, -M, -C and ignore-revs
+$ git blame -L 1,2 mathlib.py
+^74aa84f calc.py    (Ada Lovelace 2024-01-01 02:00:00 +0000 1) def add(a, b):
+a80b18cd mathlib.py (Grace Hopper 2024-01-01 09:00:00 +0000 2)         return a + b
+$ git blame -w -L 1,2 mathlib.py
+^74aa84f calc.py (Ada Lovelace 2024-01-01 02:00:00 +0000 1) def add(a, b):
+^74aa84f calc.py (Ada Lovelace 2024-01-01 02:00:00 +0000 2)         return a + b
+$ echo "$IND # indent only" > .git-blame-ignore-revs; git blame --ignore-revs-file .git-blame-ignore-revs -L 1,2 mathlib.py
+^74aa84f calc.py (Ada Lovelace 2024-01-01 02:00:00 +0000 1) def add(a, b):
+^74aa84f calc.py (Ada Lovelace 2024-01-01 02:00:00 +0000 2)         return a + b
+$ git blame -L 3,5 extra.py
+18a4e3d6 (Grace Hopper 2024-01-01 10:00:00 +0000 3) def mul(a, b):
+18a4e3d6 (Grace Hopper 2024-01-01 10:00:00 +0000 4)     """Multiply two numbers together and return the product."""
+18a4e3d6 (Grace Hopper 2024-01-01 10:00:00 +0000 5)     return a * b
+$ git blame -C -L 3,5 extra.py
+d19fa8c3 calc.py (Grace Hopper 2024-01-01 03:00:00 +0000 3) def mul(a, b):
+d19fa8c3 calc.py (Grace Hopper 2024-01-01 03:00:00 +0000 4)     """Multiply two numbers together and return the product."""
+d19fa8c3 calc.py (Grace Hopper 2024-01-01 03:00:00 +0000 5)     return a * b
+
+# shortlog, describe, grep
+$ git shortlog -sn HEAD
+     4	Grace Hopper
+     3	Ada Lovelace
+$ git shortlog -sne HEAD
+     4	Grace Hopper <grace@example.com>
+     3	Ada Lovelace <ada@example.com>
+$ git shortlog -n HEAD
+Grace Hopper (4):
+      Add mul
+      Use ValueError
+      Move mul to the end
+      Rename calc to mathlib
+
+Ada Lovelace (3):
+      Add add and sub
+      Tighten sub
+      Add div with zero check
+
+$ git describe --tags
+v0.1-6-gcced086
+$ git describe --tags --long --match "v*"
+v0.1-6-gcced086
+$ git grep -n "def " -- "*.py"
+mathlib.py:1:def add(a, b):
+mathlib.py:4:def sub(a, b):
+mathlib.py:7:def div(a, b):
+mathlib.py:12:def mul(a, b):
+$ git grep -c "return"
+mathlib.py:5
+$ git grep -n -e "ValueError" --or -e "Multiply"
+mathlib.py:9:        raise ValueError("b is zero")
+mathlib.py:13:    """Multiply two numbers together and return the product."""
+$ git grep -n "return a + b" HEAD~3
+HEAD~3:calc.py:2:    return a + b
+$ git grep --heading --break -n "def" HEAD~3
+HEAD~3:calc.py
+1:def add(a, b):
+4:def sub(a, b):
+7:def mul(a, b):
+11:def div(a, b):
+
+# bisect
+$ git bisect start HEAD good
+Bisecting: 5 revisions left to test after this (roughly 3 steps)
+[3f731e4c0f0310a688d74e64367dd3a47c12c117] commit 6
+$ git bisect run ../test.sh
+running  '../test.sh'
+Bisecting: 2 revisions left to test after this (roughly 2 steps)
+[1d543f171658316d39ab6bd2f1ed7f1c4f2a99f3] commit 9
+running  '../test.sh'
+Bisecting: 0 revisions left to test after this (roughly 1 step)
+[ebb2836da94accc2a4a67b41fb09ab2b1926263e] commit 8
+running  '../test.sh'
+Bisecting: 0 revisions left to test after this (roughly 0 steps)
+[5b22b513464bc531a463162cf02651b36eaf58b6] commit 7
+running  '../test.sh'
+ebb2836da94accc2a4a67b41fb09ab2b1926263e is the first bad commit
+commit ebb2836da94accc2a4a67b41fb09ab2b1926263e
+Author: Grace Hopper <grace@example.com>
+Date:   Mon Jan 1 18:00:00 2024 +0000
+
+    commit 8
+
+ n     | 2 +-
+ state | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+bisect found first bad commit$ git bisect log | head -12
+# bad: [20b5358744dd2fa681b7b0bf944eb48d9b1f89d6] commit 12
+# good: [ecbf00ab0173a2aaa2f06699bf3116ec869229e1] commit 1
+git bisect start 'HEAD' 'good'
+# good: [3f731e4c0f0310a688d74e64367dd3a47c12c117] commit 6
+git bisect good 3f731e4c0f0310a688d74e64367dd3a47c12c117
+# bad: [1d543f171658316d39ab6bd2f1ed7f1c4f2a99f3] commit 9
+git bisect bad 1d543f171658316d39ab6bd2f1ed7f1c4f2a99f3
+# bad: [ebb2836da94accc2a4a67b41fb09ab2b1926263e] commit 8
+git bisect bad ebb2836da94accc2a4a67b41fb09ab2b1926263e
+# good: [5b22b513464bc531a463162cf02651b36eaf58b6] commit 7
+git bisect good 5b22b513464bc531a463162cf02651b36eaf58b6
+# first bad commit: [ebb2836da94accc2a4a67b41fb09ab2b1926263e] commit 8
+$ git bisect reset
+Previous HEAD position was 5b22b51 commit 7
+Switched to branch 'main'
+# manual bisect
+$ git bisect start HEAD good
+Bisecting: 5 revisions left to test after this (roughly 3 steps)
+[3f731e4c0f0310a688d74e64367dd3a47c12c117] commit 6
+$ git bisect good
+Bisecting: 2 revisions left to test after this (roughly 2 steps)
+[1d543f171658316d39ab6bd2f1ed7f1c4f2a99f3] commit 9
+$ git bisect bad
+Bisecting: 0 revisions left to test after this (roughly 1 step)
+[ebb2836da94accc2a4a67b41fb09ab2b1926263e] commit 8
+$ git bisect bad
+Bisecting: 0 revisions left to test after this (roughly 0 steps)
+[5b22b513464bc531a463162cf02651b36eaf58b6] commit 7
+$ git bisect reset
+Previous HEAD position was 5b22b51 commit 7
+Switched to branch 'main'
+
+# range-diff
+$ git range-diff main topic v2
+1:  3dce87b = 1:  ed61e2b Add g1
+2:  9fb376a ! 2:  e5b3986 Add g2
+    @@ g2 (new)
+     +4
+     +5
+     +6
+    ++extra
+3:  6dd4604 = 3:  e6bbf2a Add g3

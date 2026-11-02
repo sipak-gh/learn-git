@@ -1,0 +1,199 @@
+# loose objects
+$ git count-objects -v
+count: 15
+size: 60
+in-pack: 0
+packs: 0
+size-pack: 0
+prune-packable: 0
+garbage: 0
+size-garbage: 0
+$ find .git/objects -type f | wc -l
+15
+$ git count-objects -vH | grep -E "^(count|size|in-pack)"
+count: 15
+size: 60.00 KiB
+in-pack: 0
+size-pack: 0 bytes
+size-garbage: 0 bytes
+
+# pack them
+$ git gc -q; git count-objects -v
+count: 0
+size: 0
+in-pack: 15
+packs: 1
+size-pack: 6
+prune-packable: 0
+garbage: 0
+size-garbage: 0
+$ ls .git/objects/pack
+pack-1d275fc639a735a2195d7244fd027650d0f165eb.idx
+pack-1d275fc639a735a2195d7244fd027650d0f165eb.pack
+$ git verify-pack -v .git/objects/pack/*.idx | head -12
+e6532b75718e30cf9a16a24dffef0a6cb8e5398b commit 215 145 12
+b06c14c91d8aeea53bd4dfada0acb060618b88ce commit 215 147 157
+23a6c1809caad24f12b6fc6c92836a9a25cbe460 commit 215 147 304
+bceb4a54ded53cbd8a80a29d6763e87905234458 commit 215 147 451
+579a9739580547dc18ad6ab7be42624a38f6e990 commit 167 120 598
+c8c803175e80982651d2c59fdab6dca41fddd842 blob   8921 4235 718
+0048b9bba0d084799e37bc0eeddd0066da047522 tree   35 46 4953
+830d707734b626ab73a51e19b7ca045484aa92be tree   35 45 4999
+171c3f02e5035fbd31c6a9f3822a74f718610440 blob   7 18 5044 1 c8c803175e80982651d2c59fdab6dca41fddd842
+f6972f486e9ed7a91ed92352c690d2b1ac6ba8b4 tree   35 45 5062
+2889e90c6765d5074d429bc0a464131bf83f3e4e blob   7 18 5107 1 c8c803175e80982651d2c59fdab6dca41fddd842
+b3820b72af648fc23b7d2bb474eb008f399046f0 tree   35 46 5125
+$ git verify-pack -v .git/objects/pack/*.idx | tail -3
+non delta: 11 objects
+chain length = 1: 4 objects
+.git/objects/pack/pack-1d275fc639a735a2195d7244fd027650d0f165eb.pack: ok
+$ git verify-pack -s .git/objects/pack/*.idx 2>&1 | tail -3
+non delta: 11 objects
+chain length = 1: 4 objects
+$ du -b big.txt; du -b .git/objects/pack/*.pack
+8921	big.txt
+5273	.git/objects/pack/pack-1d275fc639a735a2195d7244fd027650d0f165eb.pack
+
+# pack-objects directly
+$ git rev-list --objects --all | git pack-objects --stdout | wc -c
+5345
+$ git rev-list --objects --all | git pack-objects -q out-pack; ls out-pack*; rm out-pack*
+874696b5bceddc22ecd2e2950c44198c830d6ae9
+out-pack-874696b5bceddc22ecd2e2950c44198c830d6ae9.idx
+out-pack-874696b5bceddc22ecd2e2950c44198c830d6ae9.pack
+$ git rev-list --objects --all | cut -c1-12 | head -3
+e6532b75718e
+b06c14c91d8a
+23a6c1809caa
+$ git show-index < .git/objects/pack/*.idx | head -3
+4953 0048b9bba0d084799e37bc0eeddd0066da047522 (fcfeae36)
+5044 171c3f02e5035fbd31c6a9f3822a74f718610440 (feeab750)
+304 23a6c1809caad24f12b6fc6c92836a9a25cbe460 (46c741c1)
+$ git cat-file --batch-all-objects --batch-check | head -3
+0048b9bba0d084799e37bc0eeddd0066da047522 tree 35
+171c3f02e5035fbd31c6a9f3822a74f718610440 blob 8914
+23a6c1809caad24f12b6fc6c92836a9a25cbe460 commit 215
+$ git cat-file --batch-all-objects --batch-check="%(objecttype) %(objectsize) %(objectsize:disk)" | sort | uniq -c | sort -rn | head -5
+      3 tree 35 46
+      3 commit 215 147
+      2 tree 35 45
+      1 commit 215 145
+      1 commit 167 120
+$ xxd -l 12 .git/objects/pack/*.pack
+00000000: 5041 434b 0000 0002 0000 000f            PACK........
+$ xxd .git/objects/pack/*.idx | head -2
+00000000: ff74 4f63 0000 0002 0000 0001 0000 0001  .tOc............
+00000010: 0000 0001 0000 0001 0000 0001 0000 0001  ................
+
+# gc, repack, prune, reflog
+$ git cat-file -t 9711d37cd6606e9c05a0443544000adbd4cd1a6f
+blob
+$ git count-objects -v | head -2
+count: 1
+size: 4
+$ git prune --dry-run
+9711d37cd6606e9c05a0443544000adbd4cd1a6f blob
+$ git prune --expire=now -v; git count-objects -v | head -1
+9711d37cd6606e9c05a0443544000adbd4cd1a6f blob
+count: 0
+$ git repack -a -d -q; ls .git/objects/pack | wc -l
+2
+$ git repack -a -d -f --depth=10 --window=20 -q; git count-objects -v | grep -E "^(in-pack|packs)"
+in-pack: 15
+packs: 1
+$ git gc --aggressive -q; git count-objects -v | grep -E "^(in-pack|packs)"
+in-pack: 15
+packs: 1
+
+# fsck
+$ git fsck
+$ git fsck --full --strict; echo rc=$?
+rc=0
+
+# bundle
+$ git bundle create ../lab.bundle HEAD main 2>&1 | tail -1; ls -l ../lab.bundle | wc -l
+1
+$ git bundle verify ../lab.bundle 2>&1
+../lab.bundle is okay
+The bundle contains these 2 refs:
+e6532b75718e30cf9a16a24dffef0a6cb8e5398b HEAD
+e6532b75718e30cf9a16a24dffef0a6cb8e5398b refs/heads/main
+The bundle records a complete history.
+$ git bundle list-heads ../lab.bundle
+e6532b75718e30cf9a16a24dffef0a6cb8e5398b HEAD
+e6532b75718e30cf9a16a24dffef0a6cb8e5398b refs/heads/main
+$ git bundle create ../inc.bundle main~2..main 2>&1 | tail -1; git bundle verify ../inc.bundle 2>&1
+../inc.bundle is okay
+The bundle contains this ref:
+e6532b75718e30cf9a16a24dffef0a6cb8e5398b refs/heads/main
+The bundle requires this ref:
+23a6c1809caad24f12b6fc6c92836a9a25cbe460 
+$ cd ..; head -4 inc.bundle | cut -c1-60
+# v2 git bundle
+-23a6c1809caad24f12b6fc6c92836a9a25cbe460 edit 3
+e6532b75718e30cf9a16a24dffef0a6cb8e5398b refs/heads/main
+
+$ git clone -q lab.bundle from-bundle; git -C from-bundle log --oneline | head -2; git -C from-bundle remote -v | head -1
+e6532b7 edit 5
+b06c14c edit 4
+origin	/home/tbangma/learn-git/.scratch/ch13/work/lab.bundle (fetch)
+
+# shallow clone
+$ git clone -q --depth 2 file://$PWD/lab shallow 2>&1; git -C shallow log --oneline
+e6532b7 edit 5
+b06c14c edit 4
+$ cat shallow/.git/shallow
+b06c14c91d8aeea53bd4dfada0acb060618b88ce
+$ git -C shallow rev-list --count HEAD
+2
+$ git -C shallow fetch --deepen 1 2>&1 | tail -1; git -C shallow log --oneline | wc -l
+3
+$ git -C shallow fetch -q --unshallow; git -C shallow log --oneline | wc -l; ls shallow/.git/shallow 2>&1 | head -1
+5
+ls: cannot access 'shallow/.git/shallow': No such file or directory
+
+# partial clone
+$ git clone -q --filter=blob:none --no-checkout file://$PWD/lab partial 2>&1; git -C partial config --get-regexp "^remote.origin.(promisor|partialclonefilter)"
+remote.origin.promisor true
+remote.origin.partialclonefilter blob:none
+$ git -C partial count-objects -v | grep -E "^(count|in-pack)"
+count: 0
+in-pack: 10
+$ git -C partial rev-list --objects --all --missing=print | grep -c "^?"
+5
+$ git -C partial cat-file -t HEAD:big.txt
+blob
+$ git -C partial rev-list --objects --all --missing=print | grep -c "^?"
+4
+$ git -C partial checkout -q main; git -C partial rev-list --objects --all --missing=print | grep -c "^?"
+4
+
+# protocol v2 on the wire
+$ GIT_TRACE_PACKET=1 git ls-remote file://$PWD/lab 2>&1 | head -12 | cut -c16-110
+ pkt-line.c:80           packet:  upload-pack> version 2
+ pkt-line.c:80           packet:  upload-pack> agent=git/2.34.1
+ pkt-line.c:80           packet:  upload-pack> ls-refs=unborn
+ pkt-line.c:80           packet:  upload-pack> fetch=shallow wait-for-done filter
+ pkt-line.c:80           packet:  upload-pack> server-option
+ pkt-line.c:80           packet:  upload-pack> object-format=sha1
+ pkt-line.c:80           packet:  upload-pack> object-info
+ pkt-line.c:80           packet:  upload-pack> 0000
+ pkt-line.c:80           packet:    ls-remote< version 2
+ pkt-line.c:80           packet:    ls-remote< agent=git/2.34.1
+ pkt-line.c:80           packet:    ls-remote< ls-refs=unborn
+ pkt-line.c:80           packet:    ls-remote< fetch=shallow wait-for-done filter
+$ git -c protocol.version=0 ls-remote lab 2>&1 | head -1 | cut -c1-60; GIT_TRACE_PACKET=1 git -c protocol.version=0 ls-remote file://$PWD/lab 2>&1 | grep -m1 "upload-pack>" | cut -c16-90
+e6532b75718e30cf9a16a24dffef0a6cb8e5398b	HEAD
+ pkt-line.c:80           packet:  upload-pack> e6532b75718e30cf9a16a24dffef
+
+# maintenance and commit-graph
+$ git -C lab commit-graph write --reachable; ls lab/.git/objects/info
+commit-graph
+packs
+$ git -C lab commit-graph verify; echo rc=$?
+rc=0
+$ git -C lab maintenance run --task=commit-graph --task=loose-objects; echo rc=$?
+rc=0
+$ git -C lab maintenance register; git config --global --get-all maintenance.repo | sed "s#.*/work#/home/you#"; git -C lab config --get maintenance.strategy
+/home/you/lab
+incremental

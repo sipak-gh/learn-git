@@ -1,0 +1,167 @@
+# submodule add
+$ git submodule add ../libfoo vendor/foo 2>&1 | tail -3
+Cloning into '/home/tbangma/learn-git/.scratch/ch14/work/app/vendor/foo'...
+done.
+$ cat .gitmodules
+[submodule "vendor/foo"]
+	path = vendor/foo
+	url = ../libfoo
+$ git status -s
+A  .gitmodules
+A  vendor/foo
+$ git ls-files -s vendor/foo .gitmodules
+100644 f542d301c3d896e513252c40cb51504c89f1d35e 0	.gitmodules
+160000 898cf323bc98488b64cfb622a7cedd5bd060f1ff 0	vendor/foo
+$ git diff --cached --submodule
+diff --git a/.gitmodules b/.gitmodules
+new file mode 100644
+index 0000000..f542d30
+--- /dev/null
++++ b/.gitmodules
+@@ -0,0 +1,3 @@
++[submodule "vendor/foo"]
++	path = vendor/foo
++	url = ../libfoo
+Submodule vendor/foo 0000000...898cf32 (new submodule)
+$ cat vendor/foo/.git; ls .git/modules
+gitdir: ../../.git/modules/vendor/foo
+vendor
+$ git config --get-regexp "^submodule"
+submodule.vendor/foo.url /home/tbangma/learn-git/.scratch/ch14/work/libfoo
+submodule.vendor/foo.active true
+$ git cat-file -p HEAD^{tree}
+100644 blob f542d301c3d896e513252c40cb51504c89f1d35e	.gitmodules
+100644 blob ba2906d0666cf726c7eaadd2cd3db615dedfdf3a	main.c
+040000 tree b82df9a475e6fc739844b4f9c7e800dc6c79a74d	vendor
+$ git submodule status
+ 898cf323bc98488b64cfb622a7cedd5bd060f1ff vendor/foo (heads/main)
+
+# clone with submodules
+$ git clone -q app app-clone; ls app-clone/vendor/foo | wc -l; git -C app-clone submodule status
+0
+-898cf323bc98488b64cfb622a7cedd5bd060f1ff vendor/foo
+$ git -C app-clone submodule update --init 2>&1 | tail -2; git -C app-clone submodule status
+done.
+Submodule path 'vendor/foo': checked out '898cf323bc98488b64cfb622a7cedd5bd060f1ff'
+ 898cf323bc98488b64cfb622a7cedd5bd060f1ff vendor/foo (heads/main)
+$ git clone -q --recurse-submodules app app-clone2 2>&1 | tail -1; ls app-clone2/vendor/foo
+foo.c
+foo.h
+
+# upstream moves; bump the pointer
+$ git submodule status
+ 898cf323bc98488b64cfb622a7cedd5bd060f1ff vendor/foo (heads/main)
+$ git submodule update --remote --merge 2>&1 | tail -2; git submodule status
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+Submodule path 'vendor/foo': merged in 'be7707b854afa0f67fe85cffcd6725830258c258'
++be7707b854afa0f67fe85cffcd6725830258c258 vendor/foo (remotes/origin/HEAD)
+$ git status -s; git diff --submodule
+ M vendor/foo
+Submodule vendor/foo 898cf32..be7707b:
+  > foo v2
+$ git diff
+diff --git a/vendor/foo b/vendor/foo
+index 898cf32..be7707b 160000
+--- a/vendor/foo
++++ b/vendor/foo
+@@ -1 +1 @@
+-Subproject commit 898cf323bc98488b64cfb622a7cedd5bd060f1ff
++Subproject commit be7707b854afa0f67fe85cffcd6725830258c258
+$ git submodule summary HEAD~1 2>&1 | head -4
+* vendor/foo 898cf32...be7707b (1):
+  > foo v2
+
+
+# pitfall: detached HEAD inside a submodule
+$ git -C vendor/foo status -sb | head -1
+## HEAD (no branch)
+$ git -C vendor/foo switch -q -c work; w vendor/foo/foo.c "local edit"; git -C vendor/foo commit -qam "local commit"; git status -s
+ M vendor/foo
+$ git -C vendor/foo rev-parse --short HEAD; git ls-tree HEAD vendor/foo | cut -c1-60
+df756ab
+160000 commit be7707b854afa0f67fe85cffcd6725830258c258	vendo
+$ git submodule update 2>&1 | tail -1; git -C vendor/foo status -sb | head -1
+Submodule path 'vendor/foo': checked out 'be7707b854afa0f67fe85cffcd6725830258c258'
+## HEAD (no branch)
+$ git config push.recurseSubmodules; git push --recurse-submodules=check origin HEAD:refs/heads/x 2>&1 | head -3
+To /home/tbangma/learn-git/.scratch/ch14/work/app
+ * [new branch]      HEAD -> x
+
+# removing a submodule
+$ git submodule deinit -f vendor/foo 2>&1; git rm -q -f vendor/foo; ls vendor 2>&1; cat .gitmodules 2>&1 | wc -c; ls .git/modules
+Cleared directory 'vendor/foo'
+Submodule 'vendor/foo' (../libfoo) unregistered for path 'vendor/foo'
+0
+vendor
+
+# git subtree (contrib)
+$ git subtree 2>&1 | head -2; ls $(git --exec-path)/git-subtree 2>&1 | head -1
+usage: git subtree add   --prefix=<prefix> <commit>
+   or: git subtree add   --prefix=<prefix> <repository> <ref>
+/usr/lib/git-core/git-subtree
+$ git subtree add --prefix=lib/foo ../libfoo main --squash 2>&1 | tail -2
+ * branch            main       -> FETCH_HEAD
+Added dir 'lib/foo'
+$ ls lib/foo; git log --oneline -3
+foo.c
+foo.h
+8f8c361 Merge commit '8cb8f25ec35dde2aacddbe73b31f9c8ae614337d' as 'lib/foo'
+07abe87 drop submodule
+8cb8f25 Squashed 'lib/foo/' content from commit be7707b
+$ git log -1 --format=%B HEAD^2 | head -5
+Squashed 'lib/foo/' content from commit be7707b
+
+git-subtree-dir: lib/foo
+git-subtree-split: be7707b854afa0f67fe85cffcd6725830258c258
+
+
+# sparse-checkout
+$ git sparse-checkout init --cone; git sparse-checkout set api docs; ls; cat .git/info/sparse-checkout
+README
+api
+docs
+/*
+!/*/
+/api/
+/docs/
+$ git sparse-checkout list; git config core.sparseCheckout; git ls-files -v | grep -c "^S"
+api
+docs
+true
+6
+$ git sparse-checkout add web; ls
+README
+api
+docs
+web
+$ git sparse-checkout disable; ls
+README
+api
+docs
+tools
+web
+$ git clone -q --filter=blob:none --sparse file://$PWD ../mono-partial; cd ../mono-partial; git sparse-checkout set api; ls; git config --get-regexp "^(core.sparse|extensions|remote.origin.(promisor|partial))"; cd ../mono
+api
+remote.origin.promisor true
+remote.origin.partialclonefilter blob:none
+extensions.worktreeconfig true
+core.sparsecheckout true
+$ git sparse-checkout --help >/dev/null 2>&1; echo rc=$?
+rc=0
+# sparse index and set --cone on 2.34
+$ git sparse-checkout init --cone --sparse-index; git sparse-checkout set docs; git config index.sparse; tr -c "[:print:]" "\n" < .git/index | grep -E "^(README|[a-z]+/)"
+true
+README
+api/
+docs/f1.txt
+docs/f2.txt
+docs/f3.txt
+tools/
+web/
+$ git sparse-checkout disable; git sparse-checkout set --cone docs; cat .git/info/sparse-checkout; git sparse-checkout disable
+--cone
+docs
+$ git config uploadpack.allowFilter false; git clone -q --filter=blob:none file://$PWD ../no-filter 2>&1 | head -1
+warning: filtering not recognized by server, ignoring
+$ git lfs version 2>&1 | head -1
+git: 'lfs' is not a git command. See 'git --help'.

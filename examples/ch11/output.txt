@@ -1,0 +1,249 @@
+# stash basics
+$ git status -s
+ M a.txt
+M  b.txt
+?? new.txt
+$ git stash push -m "wip: a and b"
+Saved working directory and index state On main: wip: a and b
+$ git status -s
+?? new.txt
+$ git stash list
+stash@{0}: On main: wip: a and b
+$ git stash show
+ a.txt | 1 +
+ b.txt | 1 +
+ 2 files changed, 2 insertions(+)
+$ git stash show -p stash@{0} | head -12
+diff --git a/a.txt b/a.txt
+index 4cb29ea..6284eba 100644
+--- a/a.txt
++++ b/a.txt
+@@ -1,3 +1,4 @@
+ one
+ two
+ three
++changed
+diff --git a/b.txt b/b.txt
+index 587be6b..1cafd64 100644
+--- a/b.txt
+$ git stash apply && git status -s
+On branch main
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   a.txt
+	modified:   b.txt
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	new.txt
+
+no changes added to commit (use "git add" and/or "git commit -a")
+ M a.txt
+ M b.txt
+?? new.txt
+$ git stash drop
+Dropped refs/stash@{0} (80108e7e0223da8db3a8fc799d9f7aa9953436a7)
+$ git stash list; echo "(empty)"
+(empty)
+
+# index, untracked, ignored, pathspec
+$ git stash push -u -m "with untracked"
+Saved working directory and index state On main: with untracked
+$ ls; git status -s
+a.txt
+b.txt
+build
+$ git stash pop --index
+On branch main
+Changes to be committed:
+  (use "git restore --staged <file>..." to unstage)
+	modified:   b.txt
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   a.txt
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	new.txt
+
+Dropped refs/stash@{0} (6cc59198f7a52e207f9e8fb8e5016d6d98b79ef7)
+$ git status -s
+ M a.txt
+M  b.txt
+?? new.txt
+$ git stash push -m "only a" -- a.txt
+Saved working directory and index state On main: only a
+$ git status -s
+ M b.txt
+$ git stash pop
+On branch main
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   a.txt
+	modified:   b.txt
+
+no changes added to commit (use "git add" and/or "git commit -a")
+Dropped refs/stash@{0} (69ed0293a9f1fd9d468aaedbcd65d1cad5e4474a)
+$ git stash push -a -m "all"; ls; git stash pop -q; ls build
+Saved working directory and index state On main: all
+a.txt
+b.txt
+Already up to date.
+out.o
+
+# stash internals: it is commits
+$ cat .git/refs/stash | wc -c; git log --graph --oneline stash --all | head -4
+41
+*-.   d98a414 On main: inspect
+|\ \  
+| | * 4c236b2 untracked files on main: 4015102 initial
+| * 1e5c347 index on main: 4015102 initial
+$ git cat-file -p stash | sed "s/^\(author\|committer\).*/\1 .../"
+tree b4bed8cb5cb5bbb77bc2ce342bd6ce60bf4f1cf6
+parent 40151021824934c52b25b54af6098ee0b443f805
+parent 1e5c347ea34e88936a8f49baba63890459826b9d
+parent 4c236b2a649f053cdc93230714a244b48a271f8c
+author ...
+committer ...
+
+On main: inspect$ git cat-file -p stash^3 | head -1; git ls-tree stash^3
+tree eca1d9fa724b6444d38e38834f9a81ace3db5c45
+100644 blob 5a72eb2edc5d0da32ff615d210d6fa90c31ed940	new.txt
+$ git reflog show stash
+d98a414 stash@{0}: On main: inspect
+
+# stash branch, conflicts
+$ git stash branch from-stash
+Switched to a new branch 'from-stash'
+On branch from-stash
+Changes to be committed:
+  (use "git restore --staged <file>..." to unstage)
+	modified:   b.txt
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   a.txt
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	new.txt
+
+Dropped refs/stash@{0} (d98a4140484613d77314cec7bd5cb8cdca66ad31)
+$ git status -s; git stash list | wc -l
+ M a.txt
+M  b.txt
+?? new.txt
+0
+$ git stash pop
+Auto-merging a.txt
+CONFLICT (content): Merge conflict in a.txt
+On branch main
+Unmerged paths:
+  (use "git restore --staged <file>..." to unstage)
+  (use "git add <file>..." to mark resolution)
+	both modified:   a.txt
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	new.txt
+
+no changes added to commit (use "git add" and/or "git commit -a")
+The stash entry is kept in case you need it again.
+$ git stash list
+stash@{0}: WIP on main: 4015102 initial
+
+# restore --source, checkout -p
+$ git restore --source=HEAD~1 v.txt && cat v.txt && git status -s
+v1
+ M v.txt
+$ git restore --source=HEAD --staged --worktree v.txt && cat v.txt
+v2
+$ git restore -p --source=HEAD~1 v.txt <<< n
+diff --git b/v.txt a/v.txt
+index 8c1384d..626799f 100644
+--- b/v.txt
++++ a/v.txt
+@@ -1 +1 @@
+-v2
++v1
+(1/1) Apply this hunk to worktree [y,n,q,a,d,e,?]? 
+$ printf "n\ny\n" | git restore -p p.txt >/dev/null; git diff -U0 | grep "^[-+][^-+]"
+-l2
++CHANGED2
+
+# git clean
+$ git clean -n
+Would remove untracked1
+$ git clean -nd
+Would remove dir/
+Would remove untracked1
+$ git clean -f; ls
+Removing untracked1
+a.txt
+b.txt
+build
+dir
+new.txt
+p.txt
+v.txt
+$ git clean -fd; ls
+Removing dir/
+a.txt
+b.txt
+build
+new.txt
+p.txt
+v.txt
+$ git clean -ndx
+Would remove build/
+$ git clean -fdx; ls build 2>&1 | head -1
+Removing build/
+ls: cannot access 'build': No such file or directory
+$ git clean 2>&1
+fatal: clean.requireForce defaults to true and neither -i, -n, nor -f given; refusing to clean
+
+# worktrees
+$ git worktree add ../lab-hotfix -b hotfix
+Preparing worktree (new branch 'hotfix')
+HEAD is now at 09d8b43 p
+$ git worktree list
+/home/tbangma/learn-git/.scratch/ch11/work/lab         09d8b43 [main]
+/home/tbangma/learn-git/.scratch/ch11/work/lab-hotfix  09d8b43 [hotfix]
+$ ls ../lab-hotfix; cat ../lab-hotfix/.git
+a.txt
+b.txt
+new.txt
+p.txt
+v.txt
+gitdir: /home/tbangma/learn-git/.scratch/ch11/work/lab/.git/worktrees/lab-hotfix
+$ ls .git/worktrees; cat .git/worktrees/lab-hotfix/gitdir; cat .git/worktrees/lab-hotfix/HEAD
+lab-hotfix
+/home/tbangma/learn-git/.scratch/ch11/work/lab-hotfix/.git
+ref: refs/heads/hotfix
+$ git log --oneline -1 hotfix
+878e8d8 hotfix commit
+$ git switch hotfix 2>&1
+fatal: 'hotfix' is already checked out at '/home/tbangma/learn-git/.scratch/ch11/work/lab-hotfix'
+$ git worktree add ../lab-detached --detach HEAD~1; git worktree list
+Preparing worktree (detached HEAD b0b29e9)
+HEAD is now at b0b29e9 v2
+/home/tbangma/learn-git/.scratch/ch11/work/lab           09d8b43 [main]
+/home/tbangma/learn-git/.scratch/ch11/work/lab-detached  b0b29e9 (detached HEAD)
+/home/tbangma/learn-git/.scratch/ch11/work/lab-hotfix    878e8d8 [hotfix]
+$ git worktree lock --reason "on usb" ../lab-detached; git worktree list
+/home/tbangma/learn-git/.scratch/ch11/work/lab           09d8b43 [main]
+/home/tbangma/learn-git/.scratch/ch11/work/lab-detached  b0b29e9 (detached HEAD) locked
+/home/tbangma/learn-git/.scratch/ch11/work/lab-hotfix    878e8d8 [hotfix]
+$ git worktree unlock ../lab-detached; git worktree remove ../lab-detached; git worktree list
+/home/tbangma/learn-git/.scratch/ch11/work/lab         09d8b43 [main]
+/home/tbangma/learn-git/.scratch/ch11/work/lab-hotfix  878e8d8 [hotfix]
+$ git worktree list; git worktree prune -v; git worktree list
+/home/tbangma/learn-git/.scratch/ch11/work/lab         09d8b43 [main]
+/home/tbangma/learn-git/.scratch/ch11/work/lab-hotfix  878e8d8 [hotfix] prunable
+Removing worktrees/lab-hotfix: gitdir file points to non-existent location
+/home/tbangma/learn-git/.scratch/ch11/work/lab  09d8b43 [main]

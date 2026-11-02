@@ -1,0 +1,76 @@
+$ git remote add origin ../server.git && git push -u origin main 2>&1
+To ../server.git
+ * [new branch]      main -> main
+Branch 'main' set up to track remote branch 'main' from 'origin'.
+$ git branch topic && git switch topic
+Switched to branch 'topic'
+$ git switch main
+Switched to branch 'main'
+Your branch is up to date with 'origin/main'.
+$ git merge topic
+Updating 928aa13..8969640
+Fast-forward
+ topic.txt | 1 +
+ 1 file changed, 1 insertion(+)
+ create mode 100644 topic.txt
+$ git log --oneline --graph --decorate
+* 8969640 (HEAD -> main, topic) Topic work
+* 928aa13 (origin/main) Start app
+# diverge: merge commit
+$ git switch -c other
+Switched to a new branch 'other'
+$ git switch main
+Switched to branch 'main'
+Your branch is ahead of 'origin/main' by 1 commit.
+  (use "git push" to publish your local commits)
+$ git merge other -m "Merge branch other"
+Merge made by the 'ort' strategy.
+ other.txt | 1 +
+ 1 file changed, 1 insertion(+)
+ create mode 100644 other.txt
+$ git log --oneline --graph --decorate
+*   b28015c (HEAD -> main) Merge branch other
+|\  
+| * 87409f0 (other) Other work
+* | 71763cd Main work
+|/  
+* 8969640 (topic) Topic work
+* 928aa13 (origin/main) Start app
+# --no-ff forces a merge commit even when a fast-forward is possible
+$ git merge --no-ff topic2 -m "Merge topic2"
+Merge made by the 'ort' strategy.
+ t2.txt | 1 +
+ 1 file changed, 1 insertion(+)
+ create mode 100644 t2.txt
+$ git log --oneline --graph -n 4
+*   569a93b Merge topic2
+|\  
+| * 2969c73 Topic2 work
+|/  
+*   b28015c Merge branch other
+|\  
+| * 87409f0 Other work
+$ git branch -d topic other topic2 && git branch -vv
+Deleted branch topic (was 8969640).
+Deleted branch other (was 87409f0).
+Deleted branch topic2 (was 2969c73).
+* main 569a93b [origin/main: ahead 6] Merge topic2
+$ git push -q origin main && git branch -vv
+* main 569a93b [origin/main] Merge topic2
+# second clone and pull
+$ git fetch origin
+From ../server
+   569a93b..27741ae  main       -> origin/main
+$ git status -sb
+## main...origin/main [behind 1]
+$ git log --oneline main..origin/main
+27741ae Peer change
+$ git pull --ff-only
+Updating 569a93b..27741ae
+Fast-forward
+ peer.txt | 1 +
+ 1 file changed, 1 insertion(+)
+ create mode 100644 peer.txt
+$ git branch -a
+* main
+  remotes/origin/main

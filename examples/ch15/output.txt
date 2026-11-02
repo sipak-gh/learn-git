@@ -1,0 +1,165 @@
+# hooks: samples and a pre-commit hook
+$ ls .git/hooks | head -5; ls .git/hooks | wc -l
+applypatch-msg.sample
+commit-msg.sample
+fsmonitor-watchman.sample
+post-update.sample
+pre-applypatch.sample
+13
+$ git commit -m "add fixme"; echo rc=$?
+pre-commit: FIXME found, aborting
+rc=1
+$ git commit --no-verify -q -m "skip the hook"; echo rc=$?
+rc=0
+$ git commit -qam "lowercase subject"; echo rc=$?
+commit-msg: subject must start uppercase, <=72 chars, no trailing period
+rc=1
+$ git commit -qam "Proper subject"; echo rc=$?
+rc=0
+$ git commit -qam "With trailer"; git log -1 --format=%B
+hook args: message
+With trailer
+
+[ticket: DEMO-1]
+
+
+# post-* hooks and pre-push
+$ git commit -qam "Hooked commit"
+post-commit: committed 6e7b566
+$ git push origin main; echo rc=$?
+pre-push to origin (../remote.git)
+  refs/heads/main 6e7b566d4d4c5ac4bf8980a397832e4c8b298227 -> refs/heads/main 0000000000000000000000000000000000000000
+error: failed to push some refs to '../remote.git'
+rc=1
+$ git push --no-verify -q origin main; echo rc=$?
+rc=0
+
+# core.hooksPath: shared, versioned hooks
+$ git commit -qam "Via hooksPath"; echo rc=$?
+shared pre-commit ran
+rc=0
+
+# gitattributes: text/eol
+$ git add crlf.txt lf.txt 2>&1; git ls-files --eol crlf.txt lf.txt
+i/crlf  w/crlf  attr/                 	crlf.txt
+i/lf    w/lf    attr/                 	lf.txt
+warning: CRLF will be replaced by LF in crlf.txt.
+The file will have its original line endings in your working directory
+$ git ls-files --eol crlf.txt lf.txt
+i/lf    w/crlf  attr/text eol=lf      	crlf.txt
+i/lf    w/lf    attr/text eol=lf      	lf.txt
+$ git check-attr -a crlf.txt; git check-attr text eol -- lf.txt
+crlf.txt: text: set
+crlf.txt: eol: lf
+lf.txt: text: set
+lf.txt: eol: lf
+$ git ls-files --eol a.txt
+i/lf    w/lf    attr/text eol=lf      	a.txt
+
+# binary and diff drivers
+$ git check-attr -a blob.bin
+blob.bin: binary: set
+blob.bin: diff: unset
+blob.bin: merge: unset
+blob.bin: text: unset
+$ git diff note.upper
+diff --git a/note.upper b/note.upper
+index 5626abf..f719efd 100644
+--- a/note.upper
++++ b/note.upper
+@@ -1 +1 @@
+-ONE
++TWO
+$ git diff --no-textconv note.upper | tail -3
+@@ -1 +1 @@
+-one
++two
+
+# merge drivers
+$ git merge x 2>&1 | tail -2; cat list.lst
+ list.lst | 1 +
+ 1 file changed, 1 insertion(+)
+base
+theirs
+ours
+$ git merge y 2>&1 | tail -2; cat keep.cfg
+Auto-merging keep.cfg
+Merge made by the 'ort' strategy.
+m
+$ git config merge.keepours.name "always keep ours"; git config --get-regexp "^merge.keepours"
+merge.keepours.driver true
+merge.keepours.name always keep ours
+
+# clean/smudge filter and ident
+$ git show HEAD:secret.conf; cat secret.conf
+token=REDACTED
+token=abc123
+
+# export-ignore and git archive
+$ git archive HEAD | tar -t | head -12
+.githooks/
+.githooks/pre-commit
+a.txt
+blob.bin
+keep.cfg
+list.lst
+note.upper
+secret.conf
+$ git archive --format=tar --prefix=proj-1.0/ HEAD | tar -t | head -3
+proj-1.0/
+proj-1.0/.githooks/
+proj-1.0/.githooks/pre-commit
+
+# config: levels, origin, includes, aliases
+$ git config --show-origin --show-scope --get user.name | sed "s|$HOME|~|"
+global	file:~/.gitconfig	Ada Lovelace
+$ git config --list --show-origin | sed "s|$HOME|~|" | head -8
+file:~/.gitconfig	user.name=Ada Lovelace
+file:~/.gitconfig	user.email=ada@example.com
+file:~/.gitconfig	init.defaultbranch=main
+file:~/.gitconfig	advice.detachedhead=false
+file:.git/config	core.repositoryformatversion=0
+file:.git/config	core.filemode=true
+file:.git/config	core.bare=false
+file:.git/config	core.logallrefupdates=true
+$ git -C ~/work/proj config user.email
+ada@work.example
+$ git config user.email
+ada@example.com
+$ git config --global alias.lg "log --oneline --graph --decorate -5"; git config --global alias.last "log -1 --stat"; git config --global alias.sh "!echo shell alias in \$(pwd | xargs basename)"
+$ git lg | head -3; git sh; git co --help 2>&1 | head -1
+* 0105b7d (HEAD -> main) export
+* 6969f7a filters
+*   5046d3e Merge branch 'y'
+shell alias in lab
+'co' is aliased to 'checkout'
+$ git config --global --unset alias.co; git config --get-regexp "^alias"
+alias.co checkout
+alias.lg log --oneline --graph --decorate -5
+alias.last log -1 --stat
+alias.sh !echo shell alias in $(pwd | xargs basename)
+$ git config core.fileMode; git config core.autocrlf; git config --get core.editor; echo "(unset: $?)"
+true
+(unset: 1)
+
+# info/exclude and global ignore
+$ git status -s | head -3; git check-ignore -v scratch.log
+.git/info/exclude:7:scratch.log	scratch.log
+$ git config --global core.excludesFile "$HOME/.gitignore_global"; echo "*.swp" > "$HOME/.gitignore_global"; touch x.swp; git check-ignore -v x.swp | sed "s#$HOME#~#"
+~/.gitignore_global:1:*.swp	x.swp
+
+# ident, cachetextconv, a non-executable hook, includeIf hasconfig (2.36+)
+$ rm a.c; git checkout a.c; head -1 a.c; git show HEAD:a.c | head -1; git rev-parse --short HEAD:a.c
+Updated 1 path from the index
+/* $Id: e3aad293e208ed11ce33c3ec87dd1899326bd611 $ */
+/* $Id$ */
+e3aad29
+$ git log -p -1 n.upper | tail -2; git for-each-ref refs/notes
+-ONE
++TWO
+2e538000687e23396c98b0b123b1f939ced21557 commit	refs/notes/textconv/upper
+$ git commit -q --allow-empty -m "hook not executable" 2>&1
+hint: The '.git/hooks/pre-commit' hook was ignored because it's not set as executable.
+hint: You can disable this warning with `git config advice.ignoredHook false`.
+$ git config user.email
+ada@example.com

@@ -1,0 +1,267 @@
+# amend
+$ git log --oneline
+ee43cb3 add c
+d993938 add b
+c59dd67 add a
+$ git commit --amend --no-edit -q; git log --oneline
+30fb5a9 add c
+d993938 add b
+c59dd67 add a
+$ git reflog -3
+30fb5a9 HEAD@{0}: commit (amend): add c
+ee43cb3 HEAD@{1}: commit: add c
+d993938 HEAD@{2}: commit: add b
+
+# reset: soft, mixed, hard
+$ git reset --soft HEAD~1; git status -s; git log --oneline | head -1
+A  d.txt
+30fb5a9 add c
+$ git reset -q; git status -s
+?? d.txt
+$ git add d.txt; git reset --hard HEAD; git status -s; ls
+HEAD is now at 30fb5a9 add c
+a.txt
+b.txt
+c.txt
+$ git commit -q --allow-empty -m "oops"; git reset --hard HEAD~1; git log --oneline | head -1
+HEAD is now at 30fb5a9 add c
+30fb5a9 add c
+$ git reset --hard ORIG_HEAD 2>&1; git log --oneline | head -1
+HEAD is now at f1c97c1 oops
+f1c97c1 oops
+
+# revert
+$ git revert --no-edit HEAD~1
+[main 301f3c4] Revert "add d"
+ Date: Mon Jan 1 08:00:00 2024 +0000
+ 1 file changed, 1 deletion(-)
+ delete mode 100644 d.txt
+$ git log --oneline
+301f3c4 Revert "add d"
+2670aaf add e
+dfffeb5 add d
+30fb5a9 add c
+d993938 add b
+c59dd67 add a
+$ ls
+a.txt
+b.txt
+c.txt
+e.txt
+
+# cherry-pick
+$ git cherry-pick feature~1
+[main 43998e9] feature f
+ Date: Mon Jan 1 09:00:00 2024 +0000
+ 1 file changed, 1 insertion(+)
+ create mode 100644 f.txt
+$ git cherry-pick -x feature
+[main f4f1f66] feature g
+ Date: Mon Jan 1 10:00:00 2024 +0000
+ 1 file changed, 1 insertion(+)
+ create mode 100644 g.txt
+$ git log --oneline -3
+f4f1f66 feature g
+43998e9 feature f
+301f3c4 Revert "add d"
+
+# interactive rebase, scripted
+$ git log --oneline -4
+4e5e1b8 work 4
+631b34c work 3
+706c656 work 2
+21a6e60 work 1
+$ sed -n 1,4p .git/seq.sh >/dev/null; GIT_SEQUENCE_EDITOR=.git/seq.sh GIT_EDITOR="sed -i 1s/\$/-reworded/" git rebase -i HEAD~4 2>&1 | tr "\r" "\n" | tail -3
+ create mode 100644 w4.txt
+
+[KSuccessfully rebased and updated refs/heads/work.
+$ head -4 .git/last-todo
+pick 21a6e60 work 1
+pick 706c656 work 2
+pick 631b34c work 3
+pick 4e5e1b8 work 4
+$ git log --oneline -3
+5330d52 work 4-reworded
+23c9ea4 work 1
+f4f1f66 feature g
+$ git log -1 --format=%B HEAD~1
+work 1
+
+work 2
+
+$ git diff --stat HEAD~2 HEAD
+ w1.txt | 1 +
+ w2.txt | 1 +
+ w4.txt | 1 +
+ 3 files changed, 3 insertions(+)
+
+# autosquash and fixup commits
+$ git log --oneline -2
+563a783 fixup! work 1
+5330d52 work 4-reworded
+$ GIT_SEQUENCE_EDITOR=true git rebase -i --autosquash HEAD~3
+Rebasing (2/3)Rebasing (3/3)[KSuccessfully rebased and updated refs/heads/work.
+$ git log --oneline -3
+6f107c7 work 4-reworded
+004b01e work 1
+f4f1f66 feature g
+
+# --exec
+$ git rebase -x "test -f w1.txt" HEAD~2
+Rebasing (2/4)[KExecuting: test -f w1.txt
+Rebasing (3/4)Rebasing (4/4)[KExecuting: test -f w1.txt
+[KSuccessfully rebased and updated refs/heads/work.
+$ git rebase -x "test -f nonexistent.txt" HEAD~1 2>&1 | tr "\r" "\n"; git status | head -4
+Rebasing (2/2)
+
+[KExecuting: test -f nonexistent.txt
+warning: execution failed: test -f nonexistent.txt
+You can fix the problem, and then run
+
+  git rebase --continue
+
+
+interactive rebase in progress; onto 004b01e
+Last commands done (2 commands done):
+   pick 6f107c7 work 4-reworded
+   exec test -f nonexistent.txt
+$ git rebase --abort; git status -sb | head -1
+## work
+
+# --onto
+$ git log --oneline --graph --decorate main base1 topic
+* c86b8e0 (main) main moves on
+| * aaf4d68 (HEAD -> topic) topic 2
+| * b4805e4 topic 1
+| * f29c86a (base1) base1 work
+|/  
+* f4f1f66 feature g
+* 43998e9 feature f
+* 301f3c4 Revert "add d"
+* 2670aaf add e
+* dfffeb5 add d
+* 30fb5a9 add c
+* d993938 add b
+* c59dd67 add a
+$ git rebase --onto main base1 topic 2>&1 | tr "\r" "\n" | tail -1
+[KSuccessfully rebased and updated refs/heads/topic.
+$ git log --oneline --graph --decorate main base1 topic
+* 321053c (HEAD -> topic) topic 2
+* c2059c9 topic 1
+* c86b8e0 (main) main moves on
+| * f29c86a (base1) base1 work
+|/  
+* f4f1f66 feature g
+* 43998e9 feature f
+* 301f3c4 Revert "add d"
+* 2670aaf add e
+* dfffeb5 add d
+* 30fb5a9 add c
+* d993938 add b
+* c59dd67 add a
+
+# --rebase-merges
+$ git log --oneline --graph -5
+*   1c5aa30 merge side
+|\  
+| * 24b65d2 side 1
+* | 7420843 rm1
+|/  
+* fe4eea9 rm0
+* c86b8e0 main moves on
+$ git rebase main 2>&1 | tail -1; git log --oneline --graph -5
+Rebasing (1/3)Rebasing (2/3)Rebasing (3/3)[KSuccessfully rebased and updated refs/heads/rm-base.
+* 19d2ea6 side 1
+* d44a8f6 rm1
+* 7629572 rm0
+* b9b23d1 main moves
+* c86b8e0 main moves on
+$ git rebase --rebase-merges main 2>&1 | tr "\r" "\n" | tail -1; git log --oneline --graph -6
+[KSuccessfully rebased and updated refs/heads/rm-base.
+*   642a71d merge side
+|\  
+| * 2242bce side 1
+* | d44a8f6 rm1
+|/  
+* 7629572 rm0
+* b9b23d1 main moves
+* c86b8e0 main moves on
+
+# recover with reflog
+$ git reset --hard HEAD~1; git log --oneline | head -1
+HEAD is now at b9b23d1 main moves
+b9b23d1 main moves
+$ git reflog -3
+b9b23d1 HEAD@{0}: reset: moving to HEAD~1
+da9c633 HEAD@{1}: commit: will be lost
+b9b23d1 HEAD@{2}: checkout: moving from rm-base to main
+$ git reset --hard HEAD@{1}; git log --oneline | head -1
+HEAD is now at da9c633 will be lost
+da9c633 will be lost
+
+# filter-branch (deprecated)
+$ git filter-branch --tree-filter "rm -f x.txt" -- main~1..main 2>&1 | tail -2
+Rewrite da9c6338fa93a88bb6a2104e7a0c8a8051a46a28 (1/1) (0 seconds passed, remaining 0 predicted)    
+Ref 'refs/heads/main' was rewritten
+$ git ls-tree --name-only HEAD | grep -c x.txt
+0
+$ git filter-repo --version 2>&1 | head -1
+git: 'filter-repo' is not a git command. See 'git --help'.
+
+# revert a merge commit with -m
+$ git revert --no-edit HEAD
+error: commit 3c474bbeb9904d0e3e0ef4d3f394e5a637ef3d83 is a merge but no -m option was given.
+fatal: revert failed
+$ git revert --no-edit -m 1 HEAD; ls
+[main f3dc7a1] Revert "Merge feat"
+ Date: Tue Jan 2 06:00:00 2024 +0000
+ 1 file changed, 1 deletion(-)
+ delete mode 100644 f.txt
+a.txt
+m.txt
+$ git merge feat
+Already up to date.
+$ git revert --no-edit HEAD; ls
+[main 00b962c] Revert "Revert "Merge feat""
+ Date: Tue Jan 2 07:00:00 2024 +0000
+ 1 file changed, 1 insertion(+)
+ create mode 100644 f.txt
+a.txt
+f.txt
+m.txt
+
+# replace and fast-export/fast-import
+$ git log --oneline
+381814b third
+e4c58d8 second
+367380a first
+$ git replace --graft HEAD~1; git replace -l; git log --oneline
+e4c58d817f4c3a75b09a8163283e56ca9f3ec839
+381814b third
+e4c58d8 second
+$ git cat-file -p HEAD~1 | head -2; git for-each-ref refs/replace
+tree 313eba2d168cdf6ede5f9caa87c9f1b5f7c3d304
+author Ada Lovelace <ada@example.com> 1704186000 +0000
+5c833e241c864ab63ff98852016afd969f790f7d commit	refs/replace/e4c58d817f4c3a75b09a8163283e56ca9f3ec839
+$ git --no-replace-objects log --oneline | wc -l
+3
+$ git replace -d HEAD~1; git log --oneline | wc -l
+Deleted replace ref 'e4c58d817f4c3a75b09a8163283e56ca9f3ec839'
+3
+$ git fast-export --all | head -12
+blob
+mark :1
+data 4
+one
+
+reset refs/heads/main
+commit refs/heads/main
+mark :2
+author Ada Lovelace <ada@example.com> 1704182400 +0000
+committer Ada Lovelace <ada@example.com> 1704182400 +0000
+data 6
+first
+$ git init -q --bare ../copy.git; git fast-export --all | git -C ../copy.git fast-import --quiet; git -C ../copy.git log --oneline main
+381814b third
+e4c58d8 second
+367380a first

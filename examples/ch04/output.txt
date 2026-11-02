@@ -1,0 +1,118 @@
+$ git init -q lab && cd lab
+$ find .git -maxdepth 1 | sort
+.git
+.git/HEAD
+.git/branches
+.git/config
+.git/description
+.git/hooks
+.git/info
+.git/objects
+.git/refs
+$ find .git/objects | head
+.git/objects
+.git/objects/info
+.git/objects/pack
+# blob: header + content, hashed with SHA-1
+$ printf "hello\n" | git hash-object --stdin
+ce013625030ba8dba906f756967f9e9ca394464a
+$ printf "blob 6\0hello\n" | sha1sum
+ce013625030ba8dba906f756967f9e9ca394464a  -
+$ printf "hello\n" | git hash-object -w --stdin
+ce013625030ba8dba906f756967f9e9ca394464a
+$ find .git/objects -type f
+.git/objects/ce/013625030ba8dba906f756967f9e9ca394464a
+$ git cat-file -t ce013625030ba8dba906f756967f9e9ca394464a
+blob
+$ git cat-file -s ce013625030ba8dba906f756967f9e9ca394464a
+6
+$ git cat-file -p ce013625030ba8dba906f756967f9e9ca394464a
+hello
+$ python3 -c "import zlib,sys; print(repr(zlib.decompress(open(\".git/objects/ce/013625030ba8dba906f756967f9e9ca394464a\",\"rb\").read())))"
+b'blob 6\x00hello\n'
+# same content, any name: same object
+$ echo hello > a.txt; cp a.txt b.txt; git hash-object a.txt b.txt
+ce013625030ba8dba906f756967f9e9ca394464a
+ce013625030ba8dba906f756967f9e9ca394464a
+
+# tree by hand
+$ git update-index --add --cacheinfo 100644,ce013625030ba8dba906f756967f9e9ca394464a,hello.txt
+$ git write-tree
+aaa96ced2d9a1c8e72c56b253a0e2fe78393feb7
+$ git cat-file -p $(git write-tree)
+100644 blob ce013625030ba8dba906f756967f9e9ca394464a	hello.txt
+$ git cat-file -p $(git write-tree) | git mktree | head -1
+aaa96ced2d9a1c8e72c56b253a0e2fe78393feb7
+$ git ls-tree -r $(git write-tree)
+100644 blob ce013625030ba8dba906f756967f9e9ca394464a	hello.txt
+$ git cat-file tree $(git write-tree) | xxd | head -4
+00000000: 3130 3036 3434 2068 656c 6c6f 2e74 7874  100644 hello.txt
+00000010: 00ce 0136 2503 0ba8 dba9 06f7 5696 7f9e  ...6%.......V...
+00000020: 9ca3 9446 4a                             ...FJ
+# commit by hand
+$ git commit-tree -m "Hand-made commit" $(git write-tree)
+c60e6552f786d3f9455beb787e97884d932d8f93
+$ git cat-file -p c60e6552f786d3f9455beb787e97884d932d8f93
+tree aaa96ced2d9a1c8e72c56b253a0e2fe78393feb7
+author Ada Lovelace <ada@example.com> 1704074400 +0000
+committer Ada Lovelace <ada@example.com> 1704074400 +0000
+
+Hand-made commit
+$ git cat-file commit c60e6552f786d3f9455beb787e97884d932d8f93 | od -c | head -3
+0000000   t   r   e   e       a   a   a   9   6   c   e   d   2   d   9
+0000020   a   1   c   8   e   7   2   c   5   6   b   2   5   3   a   0
+0000040   e   2   f   e   7   8   3   9   3   f   e   b   7  \n   a   u
+$ git update-ref refs/heads/main c60e6552f786d3f9455beb787e97884d932d8f93 && git log --oneline
+c60e655 Hand-made commit
+$ git status -s
+ D hello.txt
+?? a.txt
+?? b.txt
+
+# a second commit, shared blob; subdirectory tree
+$ git add src a.txt && git write-tree
+58acb272bc53a82ee6ef26aee0ed774066000bc9
+$ git cat-file -p HEAD^{tree}
+100644 blob 3b18e512dba79e4c8300dd08aeb37f8e728b8dad	a.txt
+100644 blob ce013625030ba8dba906f756967f9e9ca394464a	hello.txt
+040000 tree d35fe912b068a9686f0226a47adde61b99abf5cd	src
+$ git cat-file -p HEAD:src
+100644 blob 979a1cd784949e8bbee5d848f6abf820e27562b3	main.c
+$ git ls-tree -r -t HEAD
+100644 blob 3b18e512dba79e4c8300dd08aeb37f8e728b8dad	a.txt
+100644 blob ce013625030ba8dba906f756967f9e9ca394464a	hello.txt
+040000 tree d35fe912b068a9686f0226a47adde61b99abf5cd	src
+100644 blob 979a1cd784949e8bbee5d848f6abf820e27562b3	src/main.c
+$ git cat-file -p HEAD~1^{tree}
+100644 blob ce013625030ba8dba906f756967f9e9ca394464a	hello.txt
+# annotated tag object
+$ git cat-file -p v1
+object 6486c7564d4c7bb980eb214a17512775dfe52576
+type commit
+tag v1
+tagger Ada Lovelace <ada@example.com> 1704081600 +0000
+
+Release 1
+$ git cat-file -t v1; git cat-file -t v1^{}
+tag
+commit
+
+# walk all objects
+$ git cat-file --batch-all-objects --batch-check
+19f0acc7333799cc625f1551210f2d3e5dbec13d tag 133
+3b18e512dba79e4c8300dd08aeb37f8e728b8dad blob 12
+58acb272bc53a82ee6ef26aee0ed774066000bc9 tree 100
+6486c7564d4c7bb980eb214a17512775dfe52576 commit 215
+979a1cd784949e8bbee5d848f6abf820e27562b3 blob 13
+aaa96ced2d9a1c8e72c56b253a0e2fe78393feb7 tree 37
+c60e6552f786d3f9455beb787e97884d932d8f93 commit 177
+ce013625030ba8dba906f756967f9e9ca394464a blob 6
+d35fe912b068a9686f0226a47adde61b99abf5cd tree 34
+$ git count-objects -v | head -3
+count: 9
+size: 36
+in-pack: 0
+# SHA-256 repo (experimental in 2.34)
+$ git init -q --object-format=sha256 s256 2>&1; cd s256 && echo hello | git hash-object --stdin && git rev-parse --show-object-format 2>&1
+2cf8d83d9ee29543b34a87727421fdecb7e3f3a183d337639025de576db9ebb4
+sha256

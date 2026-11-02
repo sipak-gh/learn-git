@@ -1,0 +1,67 @@
+$ git --version
+git version 2.34.1
+$ git config --global --list
+user.name=Ada Lovelace
+user.email=ada@example.com
+init.defaultbranch=main
+advice.detachedhead=false
+$ git config --global core.editor "vim"
+$ git config --show-origin --get user.name
+file:/home/tbangma/learn-git/.scratch/ch01/home/.gitconfig	Ada Lovelace
+$ git init -q demo
+$ git rev-parse --git-dir
+.git
+$ git config --local user.email "ada@work.example"
+$ git config --show-scope --list | grep -v "^local	core"
+global	user.name=Ada Lovelace
+global	user.email=ada@example.com
+global	init.defaultbranch=main
+global	advice.detachedhead=false
+global	core.editor=vim
+local	user.email=ada@work.example
+$ git config --list --show-origin | grep user
+file:/home/tbangma/learn-git/.scratch/ch01/home/.gitconfig	user.name=Ada Lovelace
+file:/home/tbangma/learn-git/.scratch/ch01/home/.gitconfig	user.email=ada@example.com
+file:.git/config	user.email=ada@work.example
+
+# three areas
+$ git status -s
+?? hello.txt
+$ git add hello.txt && git status -s
+A  hello.txt
+$ git commit -q -m "first" && git status -s
+$ git status -s
+ M hello.txt
+$ git diff --stat
+ hello.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+$ git diff --staged --stat
+
+# snapshots, not diffs: the commit's tree lists whole files
+$ git ls-tree HEAD
+100644 blob ce013625030ba8dba906f756967f9e9ca394464a	hello.txt
+
+# help
+$ git help -a | head -8
+See 'git help <command>' to read about a specific subcommand
+
+Main Porcelain Commands
+   add                  Add file contents to the index
+   am                   Apply a series of patches from a mailbox
+   archive              Create an archive of files from a named tree
+   bisect               Use binary search to find the commit that introduced a bug
+   branch               List, create, or delete branches
+$ git commit -h 2>&1 | head -4
+usage: git commit [<options>] [--] <pathspec>...
+
+    -q, --quiet           suppress summary after successful commit
+    -v, --verbose         show diff in commit message template
+$ git help --config | grep -c .
+804
+$ git help -g | head -6
+
+The Git concept guides are:
+   attributes          Defining attributes per path
+   cli                 Git command-line interface and conventions
+   core-tutorial       A Git core tutorial for developers
+   credentials         Providing usernames and passwords to Git

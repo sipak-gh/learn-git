@@ -1,0 +1,129 @@
+$ git ls-files
+a.txt
+b.txt
+d/c.txt
+$ git ls-files -s
+100644 5626abf0f72e58d7a153368ba57db4c673c0e171 0	a.txt
+100644 f719efd430d52bcfc8566a43b2eb655688d38871 0	b.txt
+100644 2bdf67abb163a4ffb2d7f3f0880c9fe5068ce782 0	d/c.txt
+$ git ls-files --debug a.txt
+a.txt
+  ctime: 1793533760:712137778
+  mtime: 1793533760:712137778
+  dev: 2096	ino: 430788
+  uid: 1000	gid: 1000
+  size: 4	flags: 0
+$ xxd .git/index | head -2
+00000000: 4449 5243 0000 0002 0000 0003 6ae7 2740  DIRC........j.'@
+00000010: 2a72 5c32 6ae7 2740 2a72 5c32 0000 0830  *r\2j.'@*r\2...0
+$ git ls-files -s | wc -l; wc -c < .git/index
+3
+307
+# index vs working tree vs HEAD
+$ git ls-files -m
+a.txt
+$ git update-index --refresh
+a.txt: needs update
+$ git diff-files --name-status
+M	a.txt
+$ git add a.txt; git diff-index --cached HEAD --name-status
+M	a.txt
+$ git diff-index HEAD --name-status
+M	a.txt
+
+# add -p is: diff -> edit -> apply --cached
+$ grep -c "^@@" ../full.patch
+2
+$ git apply --cached --recount ../full.patch && git diff --cached --stat
+ long.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+# git apply --cached stages a patch without touching the working tree
+
+# intent to add
+$ git add -N new.txt && git status -s && git diff | head -5
+ A new.txt
+diff --git a/new.txt b/new.txt
+new file mode 100644
+index 0000000..d5a09df
+--- /dev/null
++++ b/new.txt
+$ git ls-files -s new.txt
+100644 e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 0	new.txt
+$ git rm -q --cached new.txt; rm new.txt
+
+# plumbing without the working tree
+$ git update-index --add --cacheinfo 100644,$(echo hi | git hash-object -w --stdin),virtual.txt && git status -s
+AD virtual.txt
+$ git update-index --force-remove virtual.txt && git status -s
+$ GIT_INDEX_FILE=.git/tmp-index git read-tree HEAD && GIT_INDEX_FILE=.git/tmp-index git ls-files | head -2
+a.txt
+b.txt
+$ git read-tree --empty && git status -s | head -3
+D  a.txt
+D  b.txt
+D  d/c.txt
+$ git reset -q && git status -s
+
+# conflict: stages 1, 2, 3
+$ git merge side
+Auto-merging a.txt
+CONFLICT (content): Merge conflict in a.txt
+Automatic merge failed; fix conflicts and then commit the result.
+$ git ls-files -s a.txt
+100644 5626abf0f72e58d7a153368ba57db4c673c0e171 1	a.txt
+100644 ba2906d0666cf726c7eaadd2cd3db615dedfdf3a 2	a.txt
+100644 2299c37978265a95cbe835a4b0f0bbf15aad5549 3	a.txt
+$ git ls-files -u
+100644 5626abf0f72e58d7a153368ba57db4c673c0e171 1	a.txt
+100644 ba2906d0666cf726c7eaadd2cd3db615dedfdf3a 2	a.txt
+100644 2299c37978265a95cbe835a4b0f0bbf15aad5549 3	a.txt
+$ git show :1:a.txt; git show :2:a.txt; git show :3:a.txt
+one
+main
+side
+$ git status -s
+UU a.txt
+$ cat a.txt
+<<<<<<< HEAD
+main
+=======
+side
+>>>>>>> side
+$ git checkout --ours a.txt && git add a.txt && git ls-files -s a.txt
+Updated 1 path from the index
+100644 ba2906d0666cf726c7eaadd2cd3db615dedfdf3a 0	a.txt
+$ git merge --abort 2>&1; git status -s
+
+# racy git: stat data cache
+$ git ls-files --debug a.txt | sed -n 2,3p
+  ctime: 1793533760:776138053
+  mtime: 1793533760:776138053
+$ git config core.trustctime; git config core.checkStat; git config core.untrackedCache; echo "(unset prints nothing)"
+(unset prints nothing)
+
+# assume-unchanged and skip-worktree
+$ git update-index --skip-worktree b.txt && git ls-files -v | head -3
+H a.txt
+S b.txt
+H d/c.txt
+$ git status -s
+$ git update-index --no-skip-worktree b.txt && git status -s
+ M b.txt
+# sparse checkout sets skip-worktree on the index entries (cone mode keeps all top-level files)
+$ git sparse-checkout init --cone && git sparse-checkout set d; git sparse-checkout list; git ls-files -v; ls
+d
+H a.txt
+H b.txt
+H d/c.txt
+S e/f.txt
+H long.txt
+a.txt
+b.txt
+d
+long.txt
+$ git sparse-checkout disable && ls
+a.txt
+b.txt
+d
+e
+long.txt
